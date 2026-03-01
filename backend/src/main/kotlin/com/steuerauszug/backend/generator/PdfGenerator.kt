@@ -16,8 +16,10 @@ import com.itextpdf.layout.element.Paragraph
 import com.itextpdf.layout.element.Table
 import com.itextpdf.layout.properties.TextAlignment
 import com.itextpdf.layout.properties.UnitValue
+import com.steuerauszug.backend.model.EchPayment
+import com.steuerauszug.backend.model.EchSecurity
+import com.steuerauszug.backend.model.EchStock
 import com.steuerauszug.backend.model.EchTaxStatement
-import com.steuerauszug.backend.model.TaxItem
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.io.ByteArrayOutputStream
@@ -32,6 +34,7 @@ class PdfGenerator {
     companion object {
         private val log = LoggerFactory.getLogger(PdfGenerator::class.java)
         private const val FONT_SIZE_TITLE = 18f
+        private const val FONT_SIZE_SECTION = 11f
         private const val FONT_SIZE_LABEL = 10f
         private const val FONT_SIZE_BODY = 9f
         private const val FONT_SIZE_SMALL = 8f
@@ -47,7 +50,9 @@ class PdfGenerator {
 
         addHeader(doc, statement)
         addInfoTable(doc, statement)
-        addItemsTable(doc, statement)
+        addIncomeSection(doc, statement)
+        addTradesSection(doc, statement)
+        addYearEndSection(doc, statement)
         addBarcode(doc, xmlContent)
         addFooter(doc)
 
@@ -96,42 +101,131 @@ class PdfGenerator {
         doc.add(Paragraph("\n"))
     }
 
-    private fun addItemsTable(doc: Document, statement: EchTaxStatement) {
-        val headers = listOf("Beschreibung", "Währung", "Bruttobetrag", "Quellensteuer", "Nettobetrag", "Quellenland")
-        val table = Table(UnitValue.createPercentArray(floatArrayOf(30f, 10f, 15f, 15f, 15f, 15f))).useAllAvailableWidth()
+    private fun addIncomeSection(doc: Document, statement: EchTaxStatement) {
+        val allPayments = statement.securities.flatMap { sec ->
+            sec.payments.map { payment -> sec to payment }
+        }
+        if (allPayments.isEmpty()) return
 
-        addTableHeaders(table, headers)
-        addItemRows(table, statement.items)
-        addTotalRow(table, statement)
+        doc.add(Paragraph("Erträge (Dividenden & Zinsen)").setBold().setFontSize(FONT_SIZE_SECTION))
+
+        val headers = listOf("Datum", "Titel / ISIN", "Stück", "Währung", "Bruttobetrag", "Kurs CHF", "Brutto CHF", "Verrechnungssteuer CHF", "Netto CHF")
+        val widths = floatArrayOf(8f, 22f, 6f, 6f, 10f, 8f, 10f, 12f, 10f)
+        val table = Table(UnitValue.createPercentArray(widths)).useAllAvailableWidth()
+        headers.forEach { h -> table.addHeaderCell(headerCell(h)) }
+
+        var totalGrossCHF = BigDecimal.ZERO
+        var totalWt = BigDecimal.ZERO
+        var totalNet = BigDecimal.ZERO
+
+        for ((sec, payment) in allPayments) {
+            val grossCHF = payment.grossAmountCHF ?: payment.grossAmount
+            val net = grossCHF - payment.withholdingTax
+            totalGrossCHF += grossCHF
+            totalWt += payment.withholdingTax
+            totalNet += net
+
+            table.addCell(textCell(payment.date.toString()))
+            table.addCell(textCell("${sec.symbol}${sec.isin?.let { " / $it" } ?: ""}"))
+            table.addCell(numCell(payment.quantity.toPlainString()))
+            table.addCell(textCell(sec.currency))
+            table.addCell(numCell(fmt(payment.grossAmount)))
+            table.addCell(numCell(payment.exchangeRate?.let { fmt(it) } ?: ""))
+            table.addCell(numCell(fmt(grossCHF)))
+            table.addCell(numCell(fmt(payment.withholdingTax)))
+            table.addCell(numCell(fmt(net)))
+        }
+
+        // Total row
+        table.addCell(boldCell("Total"))
+        table.addCell(Cell())
+        table.addCell(Cell())
+        table.addCell(Cell())
+        table.addCell(Cell())
+        table.addCell(Cell())
+        table.addCell(boldNumCell(fmt(totalGrossCHF)))
+        table.addCell(boldNumCell(fmt(totalWt)))
+        table.addCell(boldNumCell(fmt(totalNet)))
 
         doc.add(table)
         doc.add(Paragraph("\n"))
     }
 
-    private fun addTableHeaders(table: Table, headers: List<String>) {
-        for (header in headers) {
-            table.addHeaderCell(Cell().apply { add(Paragraph(header).setBold().setFontSize(FONT_SIZE_BODY)) })
+    private fun addTradesSection(doc: Document, statement: EchTaxStatement) {
+        val allTrades = statement.securities.flatMap { sec ->
+            sec.stocks.filter { it.mutation }.map { stock -> sec to stock }
         }
+        if (allTrades.isEmpty()) return
+
+        doc.add(Paragraph("Transaktionen (Käufe / Verkäufe)").setBold().setFontSize(FONT_SIZE_SECTION))
+
+        val headers = listOf("Datum", "K/V", "Titel / ISIN", "Stück", "Währung", "Kurs", "Betrag", "Kurs CHF", "Wert CHF")
+        val widths = floatArrayOf(8f, 5f, 22f, 6f, 6f, 10f, 10f, 8f, 10f)
+        val table = Table(UnitValue.createPercentArray(widths)).useAllAvailableWidth()
+        headers.forEach { h -> table.addHeaderCell(headerCell(h)) }
+
+        for ((sec, stock) in allTrades) {
+            val kv = if (stock.mutation && stock.quantity >= BigDecimal.ZERO) "K" else "V"
+            table.addCell(textCell(stock.date.toString()))
+            table.addCell(textCell(kv))
+            table.addCell(textCell("${sec.symbol}${sec.isin?.let { " / $it" } ?: ""}"))
+            table.addCell(numCell(stock.quantity.abs().toPlainString()))
+            table.addCell(textCell(sec.currency))
+            table.addCell(numCell(fmt(stock.unitPrice)))
+            table.addCell(numCell(fmt(stock.balance.abs())))
+            table.addCell(numCell(stock.exchangeRate?.let { fmt(it) } ?: ""))
+            table.addCell(numCell(stock.valueCHF?.let { fmt(it.abs()) } ?: ""))
+        }
+
+        doc.add(table)
+        doc.add(Paragraph("\n"))
     }
 
-    private fun addItemRows(table: Table, items: List<TaxItem>) {
-        for (item in items) {
-            table.addCell(Cell().apply { add(Paragraph(item.description).setFontSize(FONT_SIZE_SMALL)) })
-            table.addCell(Cell().apply { add(Paragraph(item.currency).setFontSize(FONT_SIZE_SMALL)) })
-            table.addCell(Cell().apply { add(Paragraph(fmt(item.grossAmount)).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT)) })
-            table.addCell(Cell().apply { add(Paragraph(fmt(item.withholdingTax)).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT)) })
-            table.addCell(Cell().apply { add(Paragraph(fmt(item.netAmount)).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT)) })
-            table.addCell(Cell().apply { add(Paragraph(item.sourceCountry).setFontSize(FONT_SIZE_SMALL)) })
+    private fun addYearEndSection(doc: Document, statement: EchTaxStatement) {
+        val yearEndStocks = statement.securities.flatMap { sec ->
+            sec.stocks.filter { !it.mutation }.map { stock -> sec to stock }
         }
+        if (yearEndStocks.isEmpty()) return
+
+        doc.add(Paragraph("Jahresendbestand").setBold().setFontSize(FONT_SIZE_SECTION))
+
+        val headers = listOf("Titel / ISIN", "Stück", "Währung", "Kurs 31.12.", "Wert Fremdwährung", "Kurs CHF", "Wert CHF")
+        val widths = floatArrayOf(25f, 8f, 8f, 12f, 14f, 10f, 12f)
+        val table = Table(UnitValue.createPercentArray(widths)).useAllAvailableWidth()
+        headers.forEach { h -> table.addHeaderCell(headerCell(h)) }
+
+        for ((sec, stock) in yearEndStocks) {
+            table.addCell(textCell("${sec.symbol}${sec.isin?.let { " / $it" } ?: ""}"))
+            table.addCell(numCell(stock.quantity.toPlainString()))
+            table.addCell(textCell(sec.currency))
+            table.addCell(numCell(fmt(stock.unitPrice)))
+            table.addCell(numCell(fmt(stock.balance)))
+            table.addCell(numCell(stock.exchangeRate?.let { fmt(it) } ?: ""))
+            table.addCell(numCell(stock.valueCHF?.let { fmt(it) } ?: ""))
+        }
+
+        doc.add(table)
+        doc.add(Paragraph("\n"))
     }
 
-    private fun addTotalRow(table: Table, statement: EchTaxStatement) {
-        table.addCell(Cell().apply { add(Paragraph("Total").setBold().setFontSize(FONT_SIZE_BODY)) })
-        table.addCell(Cell().apply { add(Paragraph("").setFontSize(FONT_SIZE_BODY)) })
-        table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalGross)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
-        table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalWithholding)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
-        table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalNet)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
-        table.addCell(Cell().apply { add(Paragraph("").setFontSize(FONT_SIZE_BODY)) })
+    private fun headerCell(text: String) = Cell().apply {
+        add(Paragraph(text).setBold().setFontSize(FONT_SIZE_SMALL))
+    }
+
+    private fun textCell(text: String) = Cell().apply {
+        add(Paragraph(text).setFontSize(FONT_SIZE_SMALL))
+    }
+
+    private fun numCell(text: String) = Cell().apply {
+        add(Paragraph(text).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT))
+    }
+
+    private fun boldCell(text: String) = Cell().apply {
+        add(Paragraph(text).setBold().setFontSize(FONT_SIZE_BODY))
+    }
+
+    private fun boldNumCell(text: String) = Cell().apply {
+        add(Paragraph(text).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT))
     }
 
     private fun addBarcode(doc: Document, xmlContent: String) {

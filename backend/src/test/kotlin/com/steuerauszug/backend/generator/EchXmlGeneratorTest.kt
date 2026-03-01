@@ -22,25 +22,46 @@ class EchXmlGeneratorTest {
         institution = Institution("8888", "Test Bank", "Teststrasse 1"),
         customer = Customer("123456", "Max Muster", "Musterweg 2"),
         canton = "ZH",
-        items = listOf(
-            TaxItem(
-                type = TaxItemType.DIVIDEND,
+        securities = listOf(
+            EchSecurity(
+                symbol = "AAPL",
+                isin = "US0378331005",
                 description = "AAPL – Dividende",
                 currency = "USD",
-                grossAmount = BigDecimal("100.00"),
-                withholdingTax = BigDecimal("15.00"),
-                netAmount = BigDecimal("85.00"),
                 sourceCountry = "US",
-                isin = "US0378331005"
+                securityCategory = "SHARE",
+                payments = listOf(
+                    EchPayment(
+                        date = LocalDate.of(2024, 3, 15),
+                        quantity = BigDecimal.ONE,
+                        grossAmount = BigDecimal("100.00"),
+                        withholdingTax = BigDecimal("15.00"),
+                        exchangeRate = null,
+                        grossAmountCHF = null
+                    )
+                ),
+                yearEndTaxValue = null,
+                stocks = emptyList()
             ),
-            TaxItem(
-                type = TaxItemType.INTEREST,
-                description = "Zinsen – USD",
+            EchSecurity(
+                symbol = "INTEREST-USD",
+                isin = null,
+                description = "Zinsen USD",
                 currency = "USD",
-                grossAmount = BigDecimal("5.00"),
-                withholdingTax = BigDecimal.ZERO,
-                netAmount = BigDecimal("5.00"),
-                sourceCountry = "CH"
+                sourceCountry = "CH",
+                securityCategory = "OTHER",
+                payments = listOf(
+                    EchPayment(
+                        date = LocalDate.of(2024, 3, 31),
+                        quantity = BigDecimal.ONE,
+                        grossAmount = BigDecimal("5.00"),
+                        withholdingTax = BigDecimal.ZERO,
+                        exchangeRate = null,
+                        grossAmountCHF = null
+                    )
+                ),
+                yearEndTaxValue = null,
+                stocks = emptyList()
             )
         ),
         totalGross = BigDecimal("105.00"),
@@ -161,7 +182,7 @@ class EchXmlGeneratorTest {
     }
 
     @Test
-    fun `should include payment elements with correct revenue attributes`() {
+    fun `should include payment elements with correct revenue attributes and actual payment date`() {
         val xml = generator.generate(statement)
         val doc = parseXml(xml)
 
@@ -172,18 +193,86 @@ class EchXmlGeneratorTest {
         assertEquals("100.00", dividendPayment.getAttribute("grossRevenueA"))
         assertEquals("0", dividendPayment.getAttribute("grossRevenueB"))
         assertEquals("15.00", dividendPayment.getAttribute("withHoldingTaxClaim"))
-        assertEquals("2024-12-31", dividendPayment.getAttribute("paymentDate"))
+        assertEquals("2024-03-15", dividendPayment.getAttribute("paymentDate"))
         assertEquals("PIECE", dividendPayment.getAttribute("quotationType"))
         assertEquals("1", dividendPayment.getAttribute("quantity"))
 
         val interestPayment = payments.item(1) as Element
         assertEquals("0", interestPayment.getAttribute("grossRevenueA"))
         assertEquals("5.00", interestPayment.getAttribute("grossRevenueB"))
+        assertEquals("2024-03-31", interestPayment.getAttribute("paymentDate"))
     }
 
     @Test
-    fun `should not include listOfSecurities when there are no items`() {
-        val emptyStatement = statement.copy(items = emptyList(), totalGross = BigDecimal.ZERO,
+    fun `should write taxValue element with undefined=1 when present`() {
+        val secWithTaxValue = statement.securities[0].copy(
+            yearEndTaxValue = EchTaxValue(
+                referenceDate = LocalDate.of(2024, 12, 31),
+                quantity = BigDecimal("10"),
+                unitPrice = BigDecimal("182.00"),
+                balance = BigDecimal("1820.00"),
+                exchangeRate = BigDecimal("0.882"),
+                valueCHF = BigDecimal("1605.24")
+            )
+        )
+        val stmtWithTaxValue = statement.copy(securities = listOf(secWithTaxValue))
+        val xml = generator.generate(stmtWithTaxValue)
+        val doc = parseXml(xml)
+
+        val taxValues = doc.getElementsByTagNameNS("http://www.ech.ch/xmlns/eCH-0196/2", "taxValue")
+        assertEquals(1, taxValues.length)
+        val tv = taxValues.item(0) as Element
+        assertEquals("1", tv.getAttribute("undefined"))
+        assertEquals("2024-12-31", tv.getAttribute("referenceDate"))
+        assertEquals("10", tv.getAttribute("quantity"))
+    }
+
+    @Test
+    fun `should write stock elements with correct mutation attribute`() {
+        val secWithStocks = statement.securities[0].copy(
+            stocks = listOf(
+                EchStock(
+                    date = LocalDate.of(2024, 6, 1),
+                    mutation = true,
+                    name = "Kauf",
+                    quantity = BigDecimal("10"),
+                    unitPrice = BigDecimal("150.00"),
+                    balance = BigDecimal("1500.00"),
+                    exchangeRate = null,
+                    valueCHF = null
+                ),
+                EchStock(
+                    date = LocalDate.of(2024, 12, 31),
+                    mutation = false,
+                    name = "Jahresendbestand",
+                    quantity = BigDecimal("10"),
+                    unitPrice = BigDecimal("182.00"),
+                    balance = BigDecimal("1820.00"),
+                    exchangeRate = null,
+                    valueCHF = null
+                )
+            )
+        )
+        val stmtWithStocks = statement.copy(securities = listOf(secWithStocks))
+        val xml = generator.generate(stmtWithStocks)
+        val doc = parseXml(xml)
+
+        val stocks = doc.getElementsByTagNameNS("http://www.ech.ch/xmlns/eCH-0196/2", "stock")
+        assertEquals(2, stocks.length)
+
+        val buyStock = stocks.item(0) as Element
+        assertEquals("true", buyStock.getAttribute("mutation"))
+        assertEquals("Kauf", buyStock.getAttribute("name"))
+        assertEquals("2024-06-01", buyStock.getAttribute("referenceDate"))
+
+        val yearEndStock = stocks.item(1) as Element
+        assertEquals("false", yearEndStock.getAttribute("mutation"))
+        assertEquals("Jahresendbestand", yearEndStock.getAttribute("name"))
+    }
+
+    @Test
+    fun `should not include listOfSecurities when there are no securities`() {
+        val emptyStatement = statement.copy(securities = emptyList(), totalGross = BigDecimal.ZERO,
             totalWithholding = BigDecimal.ZERO, totalNet = BigDecimal.ZERO)
         val xml = generator.generate(emptyStatement)
         val doc = parseXml(xml)

@@ -20,16 +20,26 @@ class EchXmlValidatorTest {
         institution = Institution("8888", "Test Bank", "Teststrasse 1"),
         customer = Customer("123456", "Max Muster", "Musterweg 2"),
         canton = "ZH",
-        items = listOf(
-            TaxItem(
-                type = TaxItemType.DIVIDEND,
+        securities = listOf(
+            EchSecurity(
+                symbol = "AAPL",
+                isin = "US0378331005",
                 description = "AAPL – Dividende",
                 currency = "USD",
-                grossAmount = BigDecimal("100.00"),
-                withholdingTax = BigDecimal("15.00"),
-                netAmount = BigDecimal("85.00"),
                 sourceCountry = "US",
-                isin = "US0378331005"
+                securityCategory = "SHARE",
+                payments = listOf(
+                    EchPayment(
+                        date = LocalDate.of(2024, 3, 15),
+                        quantity = BigDecimal.ONE,
+                        grossAmount = BigDecimal("100.00"),
+                        withholdingTax = BigDecimal("15.00"),
+                        exchangeRate = null,
+                        grossAmountCHF = null
+                    )
+                ),
+                yearEndTaxValue = null,
+                stocks = emptyList()
             )
         ),
         totalGross = BigDecimal("100.00"),

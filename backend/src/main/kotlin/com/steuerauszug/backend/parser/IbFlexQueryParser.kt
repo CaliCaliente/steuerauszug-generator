@@ -14,13 +14,31 @@ class IbFlexQueryParser : IbParser {
 
     companion object {
         private const val ELEMENT_CASH_TRANSACTION = "CashTransaction"
+        private const val ELEMENT_TRADE = "Trade"
+        private const val ELEMENT_OPEN_POSITION = "OpenPosition"
         private const val ATTR_TYPE = "type"
         private const val ATTR_CURRENCY = "currency"
         private const val ATTR_DATE_TIME = "dateTime"
         private const val ATTR_DESCRIPTION = "description"
         private const val ATTR_SYMBOL = "symbol"
         private const val ATTR_AMOUNT = "amount"
+        private const val ATTR_ISIN = "isin"
+        private const val ATTR_BUY_SELL = "buySell"
+        private const val ATTR_QUANTITY = "quantity"
+        private const val ATTR_TRADE_PRICE = "tradePrice"
+        private const val ATTR_PROCEEDS = "proceeds"
+        private const val ATTR_FX_RATE_TO_BASE = "fxRateToBase"
+        private const val ATTR_ASSET_CATEGORY = "assetCategory"
+        private const val ATTR_LEVEL_OF_DETAIL = "levelOfDetail"
+        private const val ATTR_REPORT_DATE = "reportDate"
+        private const val ATTR_POSITION = "position"
+        private const val ATTR_MARK_PRICE = "markPrice"
+        private const val ATTR_POSITION_VALUE = "positionValue"
+        private const val ATTR_SIDE = "side"
+        private const val ASSET_CATEGORY_STK = "STK"
+        private const val SIDE_LONG = "Long"
         private const val TYPE_BROKER_INTEREST = "BrokerInterest"
+        private val SKIP_LEVELS = setOf("ORDER_AGGREGATE", "SUMMARY")
     }
 
     private val log = LoggerFactory.getLogger(IbFlexQueryParser::class.java)
@@ -34,6 +52,8 @@ class IbFlexQueryParser : IbParser {
         val dividends = mutableListOf<IbDividend>()
         val withholdingTax = mutableListOf<IbWithholdingTax>()
         val interest = mutableListOf<IbInterest>()
+        val trades = mutableListOf<IbTrade>()
+        val openPositions = mutableListOf<IbOpenPosition>()
 
         val transactions = doc.getElementsByTagName(ELEMENT_CASH_TRANSACTION)
         for (i in 0 until transactions.length) {
@@ -41,7 +61,19 @@ class IbFlexQueryParser : IbParser {
             parseSingleTransaction(el, dividends, withholdingTax, interest)
         }
 
-        return IbActivityData(dividends, withholdingTax, interest)
+        val tradeElements = doc.getElementsByTagName(ELEMENT_TRADE)
+        for (i in 0 until tradeElements.length) {
+            val el = tradeElements.item(i) as? Element ?: continue
+            parseTrade(el)?.let { trades.add(it) }
+        }
+
+        val positionElements = doc.getElementsByTagName(ELEMENT_OPEN_POSITION)
+        for (i in 0 until positionElements.length) {
+            val el = positionElements.item(i) as? Element ?: continue
+            parseOpenPosition(el)?.let { openPositions.add(it) }
+        }
+
+        return IbActivityData(dividends, withholdingTax, interest, trades, openPositions)
     }
 
     private fun parseSingleTransaction(
@@ -74,5 +106,74 @@ class IbFlexQueryParser : IbParser {
                 if (amount > BigDecimal.ZERO) interest.add(IbInterest(date, description, currency, amount))
             }
         }
+    }
+
+    private fun parseTrade(el: Element): IbTrade? {
+        if (el.getAttribute(ATTR_ASSET_CATEGORY) != ASSET_CATEGORY_STK) return null
+        val levelOfDetail = el.getAttribute(ATTR_LEVEL_OF_DETAIL)
+        if (SKIP_LEVELS.contains(levelOfDetail)) return null
+
+        val symbol = el.getAttribute(ATTR_SYMBOL).ifEmpty { return null }
+        val rawDate = el.getAttribute(ATTR_DATE_TIME).take(10)
+        val date = try {
+            LocalDate.parse(rawDate, dateFormatter)
+        } catch (e: Exception) {
+            log.warn("Failed to parse trade date '{}': {}", rawDate, e.message)
+            return null
+        }
+        val rawQuantity = el.getAttribute(ATTR_QUANTITY).replace(",", "").toBigDecimalOrNull() ?: return null
+        val buySell = if (rawQuantity < BigDecimal.ZERO) BuySell.SELL else BuySell.BUY
+        val tradePrice = el.getAttribute(ATTR_TRADE_PRICE).replace(",", "").toBigDecimalOrNull() ?: return null
+        val proceeds = el.getAttribute(ATTR_PROCEEDS).replace(",", "").toBigDecimalOrNull() ?: return null
+        val currency = el.getAttribute(ATTR_CURRENCY)
+        val fxRateToBase = el.getAttribute(ATTR_FX_RATE_TO_BASE).toBigDecimalOrNull() ?: BigDecimal.ONE
+        val isin = el.getAttribute(ATTR_ISIN).takeIf { it.isNotBlank() }
+        val description = el.getAttribute(ATTR_DESCRIPTION)
+
+        return IbTrade(
+            date = date,
+            symbol = symbol,
+            isin = isin,
+            description = description,
+            currency = currency,
+            buySell = buySell,
+            quantity = rawQuantity.abs(),
+            tradePrice = tradePrice,
+            proceeds = proceeds,
+            fxRateToBase = fxRateToBase
+        )
+    }
+
+    private fun parseOpenPosition(el: Element): IbOpenPosition? {
+        if (el.getAttribute(ATTR_ASSET_CATEGORY) != ASSET_CATEGORY_STK) return null
+        if (el.getAttribute(ATTR_SIDE) != SIDE_LONG) return null
+
+        val symbol = el.getAttribute(ATTR_SYMBOL).ifEmpty { return null }
+        val rawDate = el.getAttribute(ATTR_REPORT_DATE).take(10)
+        val date = try {
+            LocalDate.parse(rawDate, dateFormatter)
+        } catch (e: Exception) {
+            log.warn("Failed to parse position date '{}': {}", rawDate, e.message)
+            return null
+        }
+        val quantity = el.getAttribute(ATTR_POSITION).replace(",", "").toBigDecimalOrNull() ?: return null
+        val markPrice = el.getAttribute(ATTR_MARK_PRICE).replace(",", "").toBigDecimalOrNull() ?: return null
+        val positionValue = el.getAttribute(ATTR_POSITION_VALUE).replace(",", "").toBigDecimalOrNull() ?: return null
+        val currency = el.getAttribute(ATTR_CURRENCY)
+        val fxRateToBase = el.getAttribute(ATTR_FX_RATE_TO_BASE).toBigDecimalOrNull() ?: BigDecimal.ONE
+        val isin = el.getAttribute(ATTR_ISIN).takeIf { it.isNotBlank() }
+        val description = el.getAttribute(ATTR_DESCRIPTION)
+
+        return IbOpenPosition(
+            reportDate = date,
+            symbol = symbol,
+            isin = isin,
+            description = description,
+            currency = currency,
+            quantity = quantity,
+            markPrice = markPrice,
+            positionValue = positionValue,
+            fxRateToBase = fxRateToBase
+        )
     }
 }

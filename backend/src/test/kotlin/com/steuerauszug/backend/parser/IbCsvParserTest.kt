@@ -1,5 +1,6 @@
 package com.steuerauszug.backend.parser
 
+import com.steuerauszug.backend.model.BuySell
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
@@ -130,5 +131,78 @@ class IbCsvParserTest {
         assertTrue(result.dividends.isEmpty())
         assertTrue(result.withholdingTax.isEmpty())
         assertTrue(result.interest.isEmpty())
+    }
+
+    @Test
+    fun `should parse BUY trade from Trades section`() {
+        val csv = """
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds
+Trades,Data,Order,Stocks,USD,AAPL,2024-06-01,10,150.00,-1500.00
+        """.trimIndent()
+
+        val result = parser.parse(csv)
+
+        assertEquals(1, result.trades.size)
+        val trade = result.trades[0]
+        assertEquals("AAPL", trade.symbol)
+        assertEquals(BuySell.BUY, trade.buySell)
+        assertEquals(BigDecimal("10"), trade.quantity)
+        assertEquals(BigDecimal("150.00"), trade.tradePrice)
+    }
+
+    @Test
+    fun `should parse SELL trade when quantity is negative`() {
+        val csv = """
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds
+Trades,Data,Order,Stocks,USD,AAPL,2024-09-01,-5,175.00,875.00
+        """.trimIndent()
+
+        val result = parser.parse(csv)
+
+        assertEquals(1, result.trades.size)
+        val trade = result.trades[0]
+        assertEquals(BuySell.SELL, trade.buySell)
+        assertEquals(BigDecimal("5"), trade.quantity)
+    }
+
+    @Test
+    fun `should skip non-Order non-Stocks trade rows`() {
+        val csv = """
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,Proceeds
+Trades,Data,SubTotal,Stocks,USD,AAPL,2024-06-01,10,150.00,-1500.00
+        """.trimIndent()
+
+        val result = parser.parse(csv)
+
+        assertTrue(result.trades.isEmpty())
+    }
+
+    @Test
+    fun `should parse open position from Open Positions section`() {
+        val csv = """
+Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Close Price,Value
+Open Positions,Data,Summary,Stocks,USD,AAPL,10,182.00,1820.00
+        """.trimIndent()
+
+        val result = parser.parse(csv)
+
+        assertEquals(1, result.openPositions.size)
+        val pos = result.openPositions[0]
+        assertEquals("AAPL", pos.symbol)
+        assertEquals(BigDecimal("10"), pos.quantity)
+        assertEquals(BigDecimal("182.00"), pos.markPrice)
+        assertEquals(BigDecimal("1820.00"), pos.positionValue)
+    }
+
+    @Test
+    fun `should skip open position rows that are not Summary Stocks`() {
+        val csv = """
+Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Close Price,Value
+Open Positions,Data,Summary,Options,USD,AAPL,1,5.00,500.00
+        """.trimIndent()
+
+        val result = parser.parse(csv)
+
+        assertTrue(result.openPositions.isEmpty())
     }
 }

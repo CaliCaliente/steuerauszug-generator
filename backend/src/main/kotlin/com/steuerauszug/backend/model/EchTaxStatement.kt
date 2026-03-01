@@ -11,7 +11,7 @@ data class EchTaxStatement(
     val institution: Institution,
     val customer: Customer,
     val canton: String,
-    val items: List<TaxItem>,
+    val securities: List<EchSecurity>,
     val totalGross: BigDecimal,
     val totalWithholding: BigDecimal,
     val totalNet: BigDecimal
@@ -29,15 +29,43 @@ data class Customer(
     val address: String
 )
 
-data class TaxItem(
-    val type: TaxItemType,
+data class EchSecurity(
+    val symbol: String,
+    val isin: String?,
     val description: String,
     val currency: String,
-    val grossAmount: BigDecimal,
-    val withholdingTax: BigDecimal,
-    val netAmount: BigDecimal,
     val sourceCountry: String,
-    val isin: String? = null
+    val securityCategory: String,
+    val payments: List<EchPayment>,
+    val yearEndTaxValue: EchTaxValue?,
+    val stocks: List<EchStock>
 )
 
-enum class TaxItemType { DIVIDEND, INTEREST }
+data class EchPayment(
+    val date: LocalDate,
+    val quantity: BigDecimal,
+    val grossAmount: BigDecimal,
+    val withholdingTax: BigDecimal,
+    val exchangeRate: BigDecimal?,
+    val grossAmountCHF: BigDecimal?
+)
+
+data class EchTaxValue(
+    val referenceDate: LocalDate,
+    val quantity: BigDecimal,
+    val unitPrice: BigDecimal,
+    val balance: BigDecimal,
+    val exchangeRate: BigDecimal?,
+    val valueCHF: BigDecimal?
+)
+
+data class EchStock(
+    val date: LocalDate,
+    val mutation: Boolean,
+    val name: String,
+    val quantity: BigDecimal,
+    val unitPrice: BigDecimal,
+    val balance: BigDecimal,
+    val exchangeRate: BigDecimal?,
+    val valueCHF: BigDecimal?
+)

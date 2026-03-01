@@ -23,9 +23,27 @@ class PdfGeneratorTest {
             institution = Institution("8888", "Interactive Brokers", "Postfach 1234, 8001 Zürich"),
             customer = Customer("U1234567", "Max Mustermann", "Musterstrasse 1, 8001 Zürich"),
             canton = "ZH",
-            items = listOf(
-                TaxItem(TaxItemType.DIVIDEND, "AAPL – Dividende", "USD",
-                    BigDecimal("96.00"), BigDecimal("28.80"), BigDecimal("67.20"), "US")
+            securities = listOf(
+                EchSecurity(
+                    symbol = "AAPL",
+                    isin = "US0378331005",
+                    description = "AAPL – Dividende",
+                    currency = "USD",
+                    sourceCountry = "US",
+                    securityCategory = "SHARE",
+                    payments = listOf(
+                        EchPayment(
+                            date = LocalDate.of(2024, 3, 15),
+                            quantity = BigDecimal.ONE,
+                            grossAmount = BigDecimal("96.00"),
+                            withholdingTax = BigDecimal("28.80"),
+                            exchangeRate = null,
+                            grossAmountCHF = null
+                        )
+                    ),
+                    yearEndTaxValue = null,
+                    stocks = emptyList()
+                )
             ),
             totalGross = BigDecimal("96.00"),
             totalWithholding = BigDecimal("28.80"),

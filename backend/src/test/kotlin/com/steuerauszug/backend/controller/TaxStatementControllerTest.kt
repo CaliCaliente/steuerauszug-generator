@@ -78,7 +78,7 @@ class TaxStatementControllerTest {
         institution = Institution("8888", "Test Bank", "Teststrasse 1"),
         customer = Customer("123456", "Max Muster", "Musterweg 2"),
         canton = "ZH",
-        items = emptyList(),
+        securities = emptyList(),
         totalGross = BigDecimal.ZERO,
         totalWithholding = BigDecimal.ZERO,
         totalNet = BigDecimal.ZERO

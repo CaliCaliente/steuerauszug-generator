@@ -5,8 +5,12 @@ import com.steuerauszug.backend.generator.PdfGenerator
 import com.steuerauszug.backend.mapper.IbToEchMapper
 import com.steuerauszug.backend.model.*
 import com.steuerauszug.backend.parser.IbCsvParser
+import com.steuerauszug.backend.service.EstvExchangeRateService
+import io.mockk.every
+import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.math.BigDecimal
 import java.nio.file.Files
 
 class PdfWriteTest {
@@ -27,8 +31,13 @@ Interest,Data,USD,2024-01-02,"IBKR Managed Securities Lending Interest Program",
 """.trimIndent()
         val request = GenerationRequest("8888", "Interactive Brokers", "Postfach 1234, 8001 Zürich",
             "U1234567", "Max Mustermann", "Musterstrasse 1, 8001 Zürich", "ZH", 2024)
+
+        val mockExchangeRateService = mockk<EstvExchangeRateService>()
+        every { mockExchangeRateService.getAnnualAverageRate(any(), any()) } returns BigDecimal.ONE
+        every { mockExchangeRateService.getYearEndRate(any(), any()) } returns BigDecimal.ONE
+
         val ibData = IbCsvParser().parse(csv)
-        val statement = IbToEchMapper().map(ibData, request)
+        val statement = IbToEchMapper(mockExchangeRateService).map(ibData, request)
         val xml = EchXmlGenerator().generate(statement)
         val pdf = PdfGenerator().generate(statement, xml)
         val tmpFile = Files.createTempFile("fulltest-", ".pdf")
