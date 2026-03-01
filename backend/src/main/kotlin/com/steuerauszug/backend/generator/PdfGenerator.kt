@@ -17,6 +17,7 @@ import com.itextpdf.layout.element.Table
 import com.itextpdf.layout.properties.TextAlignment
 import com.itextpdf.layout.properties.UnitValue
 import com.steuerauszug.backend.model.EchTaxStatement
+import com.steuerauszug.backend.model.TaxItem
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.io.ByteArrayOutputStream
@@ -99,11 +100,22 @@ class PdfGenerator {
         val headers = listOf("Beschreibung", "Währung", "Bruttobetrag", "Quellensteuer", "Nettobetrag", "Quellenland")
         val table = Table(UnitValue.createPercentArray(floatArrayOf(30f, 10f, 15f, 15f, 15f, 15f))).useAllAvailableWidth()
 
+        addTableHeaders(table, headers)
+        addItemRows(table, statement.items)
+        addTotalRow(table, statement)
+
+        doc.add(table)
+        doc.add(Paragraph("\n"))
+    }
+
+    private fun addTableHeaders(table: Table, headers: List<String>) {
         for (header in headers) {
             table.addHeaderCell(Cell().apply { add(Paragraph(header).setBold().setFontSize(FONT_SIZE_BODY)) })
         }
+    }
 
-        for (item in statement.items) {
+    private fun addItemRows(table: Table, items: List<TaxItem>) {
+        for (item in items) {
             table.addCell(Cell().apply { add(Paragraph(item.description).setFontSize(FONT_SIZE_SMALL)) })
             table.addCell(Cell().apply { add(Paragraph(item.currency).setFontSize(FONT_SIZE_SMALL)) })
             table.addCell(Cell().apply { add(Paragraph(fmt(item.grossAmount)).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT)) })
@@ -111,16 +123,15 @@ class PdfGenerator {
             table.addCell(Cell().apply { add(Paragraph(fmt(item.netAmount)).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT)) })
             table.addCell(Cell().apply { add(Paragraph(item.sourceCountry).setFontSize(FONT_SIZE_SMALL)) })
         }
+    }
 
+    private fun addTotalRow(table: Table, statement: EchTaxStatement) {
         table.addCell(Cell().apply { add(Paragraph("Total").setBold().setFontSize(FONT_SIZE_BODY)) })
         table.addCell(Cell().apply { add(Paragraph("").setFontSize(FONT_SIZE_BODY)) })
         table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalGross)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
         table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalWithholding)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
         table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalNet)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
         table.addCell(Cell().apply { add(Paragraph("").setFontSize(FONT_SIZE_BODY)) })
-
-        doc.add(table)
-        doc.add(Paragraph("\n"))
     }
 
     private fun addBarcode(doc: Document, xmlContent: String) {

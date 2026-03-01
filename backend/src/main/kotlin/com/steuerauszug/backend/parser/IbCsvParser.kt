@@ -10,6 +10,10 @@ import java.time.format.DateTimeFormatter
 @Component
 class IbCsvParser : IbParser {
 
+    companion object {
+        private const val ROW_TYPE_DATA = "Data"
+    }
+
     private val log = LoggerFactory.getLogger(IbCsvParser::class.java)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -21,47 +25,45 @@ class IbCsvParser : IbParser {
         for (line in content.lines()) {
             val cols = parseCsvLine(line)
             if (cols.size < 2) continue
+            if (cols[1].trim() != ROW_TYPE_DATA) continue
 
-            val section = cols[0].trim()
-            val rowType = cols[1].trim()
-            if (rowType != "Data") continue
-
-            when (section) {
-                "Dividends" -> {
-                    if (cols.size >= 6) {
-                        val currency = cols[2].trim()
-                        val date = parseDate(cols[3].trim()) ?: continue
-                        val description = cols[4].trim()
-                        val amount = parseBigDecimal(cols[5].trim()) ?: continue
-                        if (amount > BigDecimal.ZERO) {
-                            dividends.add(IbDividend(date, IbParser.extractSymbol(description), description, currency, amount))
-                        }
-                    }
-                }
-                "Withholding Tax" -> {
-                    if (cols.size >= 6) {
-                        val currency = cols[2].trim()
-                        val date = parseDate(cols[3].trim()) ?: continue
-                        val description = cols[4].trim()
-                        val amount = parseBigDecimal(cols[5].trim()) ?: continue
-                        withholdingTax.add(IbWithholdingTax(date, IbParser.extractSymbol(description), currency, amount.abs()))
-                    }
-                }
-                "Interest" -> {
-                    if (cols.size >= 6) {
-                        val currency = cols[2].trim()
-                        val date = parseDate(cols[3].trim()) ?: continue
-                        val description = cols[4].trim()
-                        val amount = parseBigDecimal(cols[5].trim()) ?: continue
-                        if (amount > BigDecimal.ZERO) {
-                            interest.add(IbInterest(date, description, currency, amount))
-                        }
-                    }
-                }
+            when (cols[0].trim()) {
+                IbParser.TYPE_DIVIDENDS -> parseDividendRow(cols)?.let { dividends.add(it) }
+                IbParser.TYPE_WITHHOLDING_TAX -> parseWithholdingTaxRow(cols)?.let { withholdingTax.add(it) }
+                IbParser.TYPE_INTEREST -> parseInterestRow(cols)?.let { interest.add(it) }
             }
         }
 
         return IbActivityData(dividends, withholdingTax, interest)
+    }
+
+    private fun parseDividendRow(cols: List<String>): IbDividend? {
+        if (cols.size < 6) return null
+        val currency = cols[2].trim()
+        val date = parseDate(cols[3].trim()) ?: return null
+        val description = cols[4].trim()
+        val amount = parseBigDecimal(cols[5].trim()) ?: return null
+        if (amount <= BigDecimal.ZERO) return null
+        return IbDividend(date, IbParser.extractSymbol(description), description, currency, amount)
+    }
+
+    private fun parseWithholdingTaxRow(cols: List<String>): IbWithholdingTax? {
+        if (cols.size < 6) return null
+        val currency = cols[2].trim()
+        val date = parseDate(cols[3].trim()) ?: return null
+        val description = cols[4].trim()
+        val amount = parseBigDecimal(cols[5].trim()) ?: return null
+        return IbWithholdingTax(date, IbParser.extractSymbol(description), currency, amount.abs())
+    }
+
+    private fun parseInterestRow(cols: List<String>): IbInterest? {
+        if (cols.size < 6) return null
+        val currency = cols[2].trim()
+        val date = parseDate(cols[3].trim()) ?: return null
+        val description = cols[4].trim()
+        val amount = parseBigDecimal(cols[5].trim()) ?: return null
+        if (amount <= BigDecimal.ZERO) return null
+        return IbInterest(date, description, currency, amount)
     }
 
     private fun parseDate(s: String): LocalDate? =

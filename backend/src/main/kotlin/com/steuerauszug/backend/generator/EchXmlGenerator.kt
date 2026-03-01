@@ -4,11 +4,14 @@ import com.steuerauszug.backend.model.EchTaxStatement
 import org.springframework.stereotype.Component
 import java.io.StringWriter
 import javax.xml.stream.XMLOutputFactory
+import javax.xml.stream.XMLStreamWriter
 
 @Component
 class EchXmlGenerator {
 
-    private val namespace = "http://www.ech.ch/xmlns/eCH-0196/2"
+    companion object {
+        private const val NAMESPACE = "http://www.ech.ch/xmlns/eCH-0196/2"
+    }
 
     fun generate(statement: EchTaxStatement): String {
         val sw = StringWriter()
@@ -16,15 +19,29 @@ class EchXmlGenerator {
 
         writer.writeStartDocument("UTF-8", "1.0")
         writer.writeStartElement("taxStatement")
-        writer.writeDefaultNamespace(namespace)
+        writer.writeDefaultNamespace(NAMESPACE)
+        writeRootAttributes(writer, statement)
+        writeAdministrativeSection(writer, statement)
+        writeItemsSection(writer, statement)
+        writeTotalValuesSection(writer, statement)
+        writer.writeEndElement() // taxStatement
+        writer.writeEndDocument()
+        writer.flush()
+        writer.close()
+
+        return sw.toString()
+    }
+
+    private fun writeRootAttributes(writer: XMLStreamWriter, statement: EchTaxStatement) {
         writer.writeAttribute("documentId", statement.documentId)
         writer.writeAttribute("taxPeriod", statement.taxPeriod.toString())
         writer.writeAttribute("periodFrom", statement.periodFrom.toString())
         writer.writeAttribute("periodTo", statement.periodTo.toString())
         writer.writeAttribute("canton", statement.canton)
         writer.writeAttribute("totalTaxValue", statement.totalNet.toPlainString())
+    }
 
-        // administrativeInformation
+    private fun writeAdministrativeSection(writer: XMLStreamWriter, statement: EchTaxStatement) {
         writer.writeStartElement("administrativeInformation")
 
         writer.writeStartElement("institution")
@@ -40,8 +57,9 @@ class EchXmlGenerator {
         writer.writeEndElement()
 
         writer.writeEndElement() // administrativeInformation
+    }
 
-        // items
+    private fun writeItemsSection(writer: XMLStreamWriter, statement: EchTaxStatement) {
         writer.writeStartElement("items")
         for (item in statement.items) {
             writer.writeStartElement("item")
@@ -55,23 +73,17 @@ class EchXmlGenerator {
             writer.writeEndElement()
         }
         writer.writeEndElement() // items
+    }
 
-        // totalValues
+    private fun writeTotalValuesSection(writer: XMLStreamWriter, statement: EchTaxStatement) {
         writer.writeStartElement("totalValues")
         writeElement(writer, "totalGross", statement.totalGross.toPlainString())
         writeElement(writer, "totalWithholding", statement.totalWithholding.toPlainString())
         writeElement(writer, "totalNet", statement.totalNet.toPlainString())
         writer.writeEndElement()
-
-        writer.writeEndElement() // taxStatement
-        writer.writeEndDocument()
-        writer.flush()
-        writer.close()
-
-        return sw.toString()
     }
 
-    private fun writeElement(writer: javax.xml.stream.XMLStreamWriter, name: String, value: String) {
+    private fun writeElement(writer: XMLStreamWriter, name: String, value: String) {
         writer.writeStartElement(name)
         writer.writeCharacters(value)
         writer.writeEndElement()

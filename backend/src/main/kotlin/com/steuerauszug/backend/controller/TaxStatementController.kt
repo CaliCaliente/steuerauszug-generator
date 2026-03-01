@@ -24,6 +24,10 @@ class TaxStatementController(
     private val pdfGenerator: PdfGenerator
 ) {
 
+    companion object {
+        private const val PDF_FILENAME_PREFIX = "steuerausweis-"
+    }
+
     @PostMapping("/generate", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun generate(
         @RequestPart("file") file: MultipartFile,
@@ -40,7 +44,7 @@ class TaxStatementController(
         val pdf = pdfGenerator.generate(statement, xml)
 
         return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=steuerausweis-${request.taxYear}.pdf")
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=$PDF_FILENAME_PREFIX${request.taxYear}.pdf")
             .contentType(MediaType.APPLICATION_PDF)
             .body(pdf)
     }
