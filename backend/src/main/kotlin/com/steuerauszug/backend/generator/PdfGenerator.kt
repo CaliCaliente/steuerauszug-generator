@@ -2,6 +2,7 @@ package com.steuerauszug.backend.generator
 
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
+import com.google.zxing.pdf417.encoder.Dimensions
 import com.google.zxing.client.j2se.MatrixToImageWriter
 import com.google.zxing.pdf417.PDF417Writer
 import com.itextpdf.io.image.ImageDataFactory
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component
 import java.io.ByteArrayOutputStream
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.zip.GZIPOutputStream
 import javax.imageio.ImageIO
 
 @Component
@@ -122,12 +124,14 @@ class PdfGenerator {
             imgParagraph.setTextAlignment(TextAlignment.CENTER)
             doc.add(imgParagraph)
         } catch (e: Exception) {
+            System.err.println("Barcode generation failed: ${e::class.simpleName}: ${e.message}")
+            e.printStackTrace(System.err)
             doc.add(Paragraph("Barcode konnte nicht generiert werden: ${e.message}").setFontSize(8f))
         }
 
         // Footer
         doc.add(
-            Paragraph("Generiert gemäss eCH-0196 v2.2.0")
+            Paragraph("Generiert gemäss eCH-0196 v2.2.0 | PDF417-Barcode enthält GZIP-komprimiertes XML")
                 .setFontSize(7f)
                 .setTextAlignment(TextAlignment.CENTER)
         )
@@ -137,11 +141,17 @@ class PdfGenerator {
     }
 
     private fun generateBarcode(content: String): ByteArray {
+        // PDF417 max binary capacity is ~1108 bytes; GZIP-compress to stay within limits.
+        // Compressed bytes are re-encoded as ISO-8859-1 so every byte survives the String round-trip.
+        val compressed = ByteArrayOutputStream().also { baos ->
+            GZIPOutputStream(baos).use { gz -> gz.write(content.toByteArray(Charsets.UTF_8)) }
+        }.toByteArray()
+        val barcodeString = String(compressed, Charsets.ISO_8859_1)
         val hints = mapOf(
-            EncodeHintType.CHARACTER_SET to "UTF-8",
-            EncodeHintType.ERROR_CORRECTION to 2
+            EncodeHintType.CHARACTER_SET to "ISO-8859-1",
+            EncodeHintType.PDF417_DIMENSIONS to Dimensions(1, 30, 2, 90)
         )
-        val bitMatrix = PDF417Writer().encode(content, BarcodeFormat.PDF_417, 800, 400, hints)
+        val bitMatrix = PDF417Writer().encode(barcodeString, BarcodeFormat.PDF_417, 0, 0, hints)
         val bufferedImage = MatrixToImageWriter.toBufferedImage(bitMatrix)
         val baos = ByteArrayOutputStream()
         ImageIO.write(bufferedImage, "PNG", baos)
