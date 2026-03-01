@@ -36,7 +36,8 @@ data class TaxItem(
     val grossAmount: BigDecimal,
     val withholdingTax: BigDecimal,
     val netAmount: BigDecimal,
-    val sourceCountry: String
+    val sourceCountry: String,
+    val isin: String? = null
 )
 
 enum class TaxItemType { DIVIDEND, INTEREST }

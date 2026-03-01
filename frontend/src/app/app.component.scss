@@ -1,0 +1,27 @@
+.app-nav {
+  display: flex;
+  gap: 0;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0 1.5rem;
+
+  a {
+    display: inline-block;
+    padding: 0.875rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #6b7280;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+
+    &:hover {
+      color: #111827;
+    }
+
+    &.active {
+      color: #1d4ed8;
+      border-bottom-color: #1d4ed8;
+    }
+  }
+}

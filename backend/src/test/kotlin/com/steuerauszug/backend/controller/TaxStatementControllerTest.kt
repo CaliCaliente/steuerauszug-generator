@@ -3,12 +3,17 @@ package com.steuerauszug.backend.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.steuerauszug.backend.generator.EchXmlGenerator
+import com.steuerauszug.backend.generator.EchXmlValidator
+import com.steuerauszug.backend.generator.PdfBarcodeExtractor
 import com.steuerauszug.backend.generator.PdfGenerator
+import com.steuerauszug.backend.generator.XmlValidationException
 import com.steuerauszug.backend.mapper.IbToEchMapper
 import com.steuerauszug.backend.model.*
 import com.steuerauszug.backend.parser.IbCsvParser
 import com.steuerauszug.backend.parser.IbFlexQueryParser
 import io.mockk.every
+import io.mockk.just
+import io.mockk.runs
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -45,6 +50,12 @@ class TaxStatementControllerTest {
 
     @MockkBean
     private lateinit var pdfGenerator: PdfGenerator
+
+    @MockkBean
+    private lateinit var echXmlValidator: EchXmlValidator
+
+    @MockkBean
+    private lateinit var pdfBarcodeExtractor: PdfBarcodeExtractor
 
     private val validRequest = GenerationRequest(
         clearingNumber = "8888",
@@ -86,6 +97,7 @@ class TaxStatementControllerTest {
         every { ibCsvParser.parse(any()) } returns emptyIbData
         every { mapper.map(any(), any()) } returns statement
         every { xmlGenerator.generate(any()) } returns "<xml/>"
+        every { echXmlValidator.validate(any()) } just runs
         every { pdfGenerator.generate(any(), any()) } returns ByteArray(0)
 
         mockMvc.perform(
@@ -105,6 +117,7 @@ class TaxStatementControllerTest {
         every { ibFlexQueryParser.parse(any()) } returns emptyIbData
         every { mapper.map(any(), any()) } returns statement
         every { xmlGenerator.generate(any()) } returns "<xml/>"
+        every { echXmlValidator.validate(any()) } just runs
         every { pdfGenerator.generate(any(), any()) } returns ByteArray(0)
 
         mockMvc.perform(
@@ -123,6 +136,7 @@ class TaxStatementControllerTest {
         every { ibCsvParser.parse(any()) } returns emptyIbData
         every { mapper.map(any(), any()) } returns statement
         every { xmlGenerator.generate(any()) } returns "<xml/>"
+        every { echXmlValidator.validate(any()) } just runs
         every { pdfGenerator.generate(any(), any()) } returns byteArrayOf(0x25, 0x50, 0x44, 0x46)
 
         mockMvc.perform(
@@ -141,6 +155,7 @@ class TaxStatementControllerTest {
         every { ibCsvParser.parse(any()) } returns emptyIbData
         every { mapper.map(any(), any()) } returns statement
         every { xmlGenerator.generate(any()) } returns "<xml/>"
+        every { echXmlValidator.validate(any()) } just runs
         every { pdfGenerator.generate(any(), any()) } returns ByteArray(0)
 
         mockMvc.perform(
@@ -183,6 +198,66 @@ class TaxStatementControllerTest {
             multipart("/api/steuerausweis/generate")
                 .file(filePart)
                 .part(requestPart())
+        ).andExpect(status().isInternalServerError)
+    }
+
+    @Test
+    fun `should return 500 when generated XML fails validation`() {
+        val filePart = MockMultipartFile("file", "activity.csv", "text/csv", "data".toByteArray())
+
+        every { ibCsvParser.parse(any()) } returns emptyIbData
+        every { mapper.map(any(), any()) } returns statement
+        every { xmlGenerator.generate(any()) } returns "<xml/>"
+        every { echXmlValidator.validate(any()) } throws XmlValidationException(listOf("ERROR: missing required attribute"))
+
+        mockMvc.perform(
+            multipart("/api/steuerausweis/generate")
+                .file(filePart)
+                .part(requestPart())
+        ).andExpect(status().isInternalServerError)
+    }
+
+    @Test
+    fun `should return valid=true when barcode contains valid XML`() {
+        val pdfPart = MockMultipartFile("file", "test.pdf", "application/pdf", "pdfdata".toByteArray())
+
+        every { pdfBarcodeExtractor.extract(any()) } returns "<validXml/>"
+        every { echXmlValidator.validate(any()) } just runs
+
+        mockMvc.perform(
+            multipart("/api/steuerausweis/validate")
+                .file(pdfPart)
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.valid").value(true))
+    }
+
+    @Test
+    fun `should return valid=false when barcode contains invalid XML`() {
+        val pdfPart = MockMultipartFile("file", "test.pdf", "application/pdf", "pdfdata".toByteArray())
+        val errors = listOf("ERROR: missing required attribute 'id'")
+
+        every { pdfBarcodeExtractor.extract(any()) } returns "<invalidXml/>"
+        every { echXmlValidator.validate(any()) } throws XmlValidationException(errors)
+
+        mockMvc.perform(
+            multipart("/api/steuerausweis/validate")
+                .file(pdfPart)
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.valid").value(false))
+            .andExpect(jsonPath("$.errors[0]").value(errors[0]))
+    }
+
+    @Test
+    fun `should return 500 when PDF extraction fails`() {
+        val pdfPart = MockMultipartFile("file", "test.pdf", "application/pdf", "pdfdata".toByteArray())
+
+        every { pdfBarcodeExtractor.extract(any()) } throws RuntimeException("No barcode found")
+
+        mockMvc.perform(
+            multipart("/api/steuerausweis/validate")
+                .file(pdfPart)
         ).andExpect(status().isInternalServerError)
     }
 }

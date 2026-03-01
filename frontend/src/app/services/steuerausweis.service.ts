@@ -13,6 +13,11 @@ export interface GenerationRequest {
   customerAddress: string;
 }
 
+export interface ValidationResponse {
+  valid: boolean;
+  errors?: string[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class SteuerauszugService {
   constructor(private http: HttpClient) {}
@@ -27,5 +32,11 @@ export class SteuerauszugService {
     return this.http.post('/api/steuerausweis/generate', formData, {
       responseType: 'blob'
     });
+  }
+
+  validate(file: File): Observable<ValidationResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ValidationResponse>('/api/steuerausweis/validate', formData);
   }
 }

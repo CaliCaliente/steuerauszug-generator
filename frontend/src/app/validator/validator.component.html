@@ -1,0 +1,72 @@
+<div class="validator-container">
+  <header class="page-header">
+    <h1>E-Steuerausweis Validierung</h1>
+    <p class="subtitle">PDF hochladen &nbsp;|&nbsp; eCH-0196/2 Barcode-Validierung</p>
+  </header>
+
+  <section class="card">
+    <h2>PDF hochladen</h2>
+    <div
+      class="drop-zone"
+      [class.drag-over]="isDragging()"
+      [class.file-selected]="!!selectedFile()"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave()"
+      (drop)="onDrop($event)"
+    >
+      @if (selectedFile()) {
+        <div class="file-info">
+          <span class="file-icon">&#128196;</span>
+          <span class="file-name">{{ selectedFile()!.name }}</span>
+          <span class="file-size">({{ (selectedFile()!.size / 1024).toFixed(1) }} KB)</span>
+        </div>
+      } @else {
+        <p class="drop-hint">PDF hier ablegen</p>
+      }
+      <label class="upload-btn">
+        {{ selectedFile() ? 'Andere Datei wählen' : 'Datei auswählen' }}
+        <input type="file" accept=".pdf" (change)="onFileSelected($event)" hidden>
+      </label>
+    </div>
+    <p class="hint">Unterstützt: E-Steuerausweis PDF mit eingebettetem PDF417-Barcode</p>
+  </section>
+
+  @if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  }
+
+  @if (result()) {
+    @if (result()!.valid) {
+      <div class="result-box valid">
+        <span class="result-icon">&#10003;</span>
+        Dokument ist gültig
+      </div>
+    } @else {
+      <div class="result-box invalid">
+        <span class="result-icon">&#10007;</span>
+        Dokument ist ungültig
+        @if (result()!.errors && result()!.errors!.length > 0) {
+          <ul class="error-list">
+            @for (err of result()!.errors!; track err) {
+              <li>{{ err }}</li>
+            }
+          </ul>
+        }
+      </div>
+    }
+  }
+
+  <div class="action-bar">
+    <button class="validate-btn" [disabled]="!canValidate" (click)="validate()">
+      @if (loading()) {
+        <span class="spinner"></span>
+        Validierung läuft&hellip;
+      } @else {
+        PDF validieren
+      }
+    </button>
+    @if (!selectedFile()) {
+      <p class="action-hint">Bitte zuerst ein PDF hochladen.</p>
+    }
+  </div>
+</div>

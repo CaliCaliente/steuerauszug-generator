@@ -60,7 +60,8 @@ class IbToEchMapper {
                 grossAmount = grossAmount,
                 withholdingTax = wt,
                 netAmount = grossAmount - wt,
-                sourceCountry = extractCountryFromDescription(divs.first().description)
+                sourceCountry = extractCountryFromDescription(divs.first().description),
+                isin = extractIsinFromDescription(divs.first().description)
             )
         }
 
@@ -83,5 +84,10 @@ class IbToEchMapper {
         val isinRegex = Regex("""\(([A-Z]{2}[A-Z0-9]{10})\)""")
         val match = isinRegex.find(description)
         return match?.groupValues?.get(1)?.take(2) ?: UNKNOWN_COUNTRY_CODE
+    }
+
+    private fun extractIsinFromDescription(description: String): String? {
+        val isinRegex = Regex("""\(([A-Z]{2}[A-Z0-9]{10})\)""")
+        return isinRegex.find(description)?.groupValues?.get(1)
     }
 }

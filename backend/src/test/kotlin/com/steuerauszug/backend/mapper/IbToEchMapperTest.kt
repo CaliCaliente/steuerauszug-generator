@@ -108,6 +108,45 @@ class IbToEchMapperTest {
     }
 
     @Test
+    fun `should extract full ISIN for dividend items`() {
+        val ibData = IbActivityData(
+            dividends = listOf(dividend("AAPL", "100.00", "AAPL(US0378331005) Cash Dividend")),
+            withholdingTax = emptyList(),
+            interest = emptyList()
+        )
+
+        val result = mapper.map(ibData, baseRequest)
+
+        assertEquals("US0378331005", result.items[0].isin)
+    }
+
+    @Test
+    fun `should set null isin for interest items`() {
+        val ibData = IbActivityData(
+            dividends = emptyList(),
+            withholdingTax = emptyList(),
+            interest = listOf(interest("USD", "5.00"))
+        )
+
+        val result = mapper.map(ibData, baseRequest)
+
+        assertNull(result.items[0].isin)
+    }
+
+    @Test
+    fun `should set null isin when ISIN not found in description`() {
+        val ibData = IbActivityData(
+            dividends = listOf(dividend("AAPL", "100.00", "AAPL Cash Dividend No ISIN")),
+            withholdingTax = emptyList(),
+            interest = emptyList()
+        )
+
+        val result = mapper.map(ibData, baseRequest)
+
+        assertNull(result.items[0].isin)
+    }
+
+    @Test
     fun `should return XX when ISIN not found in description`() {
         val ibData = IbActivityData(
             dividends = listOf(dividend("AAPL", "100.00", "AAPL Cash Dividend No ISIN")),

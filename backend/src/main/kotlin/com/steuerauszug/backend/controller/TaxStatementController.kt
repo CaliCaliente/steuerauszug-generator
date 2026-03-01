@@ -1,9 +1,13 @@
 package com.steuerauszug.backend.controller
 
 import com.steuerauszug.backend.generator.EchXmlGenerator
+import com.steuerauszug.backend.generator.EchXmlValidator
+import com.steuerauszug.backend.generator.PdfBarcodeExtractor
 import com.steuerauszug.backend.generator.PdfGenerator
+import com.steuerauszug.backend.generator.XmlValidationException
 import com.steuerauszug.backend.mapper.IbToEchMapper
 import com.steuerauszug.backend.model.GenerationRequest
+import com.steuerauszug.backend.model.ValidationResponse
 import com.steuerauszug.backend.parser.IbCsvParser
 import com.steuerauszug.backend.parser.IbFlexQueryParser
 import jakarta.validation.Valid
@@ -21,7 +25,9 @@ class TaxStatementController(
     private val ibFlexQueryParser: IbFlexQueryParser,
     private val mapper: IbToEchMapper,
     private val xmlGenerator: EchXmlGenerator,
-    private val pdfGenerator: PdfGenerator
+    private val pdfGenerator: PdfGenerator,
+    private val echXmlValidator: EchXmlValidator,
+    private val pdfBarcodeExtractor: PdfBarcodeExtractor
 ) {
 
     companion object {
@@ -41,6 +47,7 @@ class TaxStatementController(
         }
         val statement = mapper.map(ibData, request)
         val xml = xmlGenerator.generate(statement)
+        echXmlValidator.validate(xml)
         val pdf = pdfGenerator.generate(statement, xml)
 
         return ResponseEntity.ok()
@@ -48,4 +55,15 @@ class TaxStatementController(
             .contentType(MediaType.APPLICATION_PDF)
             .body(pdf)
     }
+
+    @PostMapping("/validate", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    @ResponseBody
+    fun validate(@RequestPart("file") file: MultipartFile): ResponseEntity<ValidationResponse> =
+        try {
+            val xml = pdfBarcodeExtractor.extract(file.bytes)
+            echXmlValidator.validate(xml)
+            ResponseEntity.ok(ValidationResponse(valid = true))
+        } catch (e: XmlValidationException) {
+            ResponseEntity.ok(ValidationResponse(valid = false, errors = e.errors))
+        }
 }
