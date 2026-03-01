@@ -6,6 +6,7 @@ import com.steuerauszug.backend.mapper.IbToEchMapper
 import com.steuerauszug.backend.model.GenerationRequest
 import com.steuerauszug.backend.parser.IbCsvParser
 import com.steuerauszug.backend.parser.IbFlexQueryParser
+import jakarta.validation.Valid
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -26,7 +27,7 @@ class TaxStatementController(
     @PostMapping("/generate", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun generate(
         @RequestPart("file") file: MultipartFile,
-        @RequestPart("request") request: GenerationRequest
+        @Valid @RequestPart("request") request: GenerationRequest
     ): ResponseEntity<ByteArray> {
         val content = file.inputStream.bufferedReader().readText()
         val ibData = if (content.trimStart().startsWith("<")) {

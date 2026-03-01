@@ -2,13 +2,19 @@ package com.steuerauszug.backend
 
 import com.steuerauszug.backend.generator.PdfGenerator
 import com.steuerauszug.backend.model.*
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 import java.time.LocalDate
 
 class PdfGeneratorTest {
+
+    companion object {
+        private const val MIN_PDF_SIZE = 1000
+    }
+
     @Test
-    fun testPdfGeneration() {
+    fun `PDF generation produces a non-empty PDF`() {
         val statement = EchTaxStatement(
             documentId = "CH-8888-U1234567-2024-001",
             taxPeriod = 2024,
@@ -26,16 +32,7 @@ class PdfGeneratorTest {
             totalNet = BigDecimal("67.20")
         )
         val xml = "<?xml version=\"1.0\"?><taxStatement>test</taxStatement>"
-        try {
-            val pdf = PdfGenerator().generate(statement, xml)
-            println("PDF size: ${pdf.size} bytes")
-            assert(pdf.size > 1000)
-            println(String(pdf.take(8).toByteArray()))
-        } catch (e: Exception) {
-            println("ERROR: ${e::class.simpleName}: ${e.message}")
-            e.printStackTrace()
-            throw e
-        }
+        val pdf = PdfGenerator().generate(statement, xml)
+        assertTrue(pdf.size > MIN_PDF_SIZE) { "PDF too small: ${pdf.size} bytes" }
     }
 }
-// note: added write to file above

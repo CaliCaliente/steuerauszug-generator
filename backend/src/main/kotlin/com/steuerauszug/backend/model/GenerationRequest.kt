@@ -1,12 +1,15 @@
 package com.steuerauszug.backend.model
 
+import jakarta.validation.constraints.Min
+import jakarta.validation.constraints.NotBlank
+
 data class GenerationRequest(
-    val clearingNumber: String,
-    val institutionName: String,
-    val institutionAddress: String,
-    val customerNumber: String,
-    val customerName: String,
-    val customerAddress: String,
-    val canton: String,
-    val taxYear: Int
+    @field:NotBlank val clearingNumber: String,
+    @field:NotBlank val institutionName: String,
+    @field:NotBlank val institutionAddress: String,
+    @field:NotBlank val customerNumber: String,
+    @field:NotBlank val customerName: String,
+    @field:NotBlank val customerAddress: String,
+    @field:NotBlank val canton: String,
+    @field:Min(1900) val taxYear: Int
 )

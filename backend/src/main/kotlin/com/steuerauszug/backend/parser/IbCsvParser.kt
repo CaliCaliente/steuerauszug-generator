@@ -1,6 +1,7 @@
 package com.steuerauszug.backend.parser
 
 import com.steuerauszug.backend.model.*
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -9,6 +10,7 @@ import java.time.format.DateTimeFormatter
 @Component
 class IbCsvParser : IbParser {
 
+    private val log = LoggerFactory.getLogger(IbCsvParser::class.java)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     override fun parse(content: String): IbActivityData {
@@ -32,7 +34,7 @@ class IbCsvParser : IbParser {
                         val description = cols[4].trim()
                         val amount = parseBigDecimal(cols[5].trim()) ?: continue
                         if (amount > BigDecimal.ZERO) {
-                            dividends.add(IbDividend(date, extractSymbol(description), description, currency, amount))
+                            dividends.add(IbDividend(date, IbParser.extractSymbol(description), description, currency, amount))
                         }
                     }
                 }
@@ -42,7 +44,7 @@ class IbCsvParser : IbParser {
                         val date = parseDate(cols[3].trim()) ?: continue
                         val description = cols[4].trim()
                         val amount = parseBigDecimal(cols[5].trim()) ?: continue
-                        withholdingTax.add(IbWithholdingTax(date, extractSymbol(description), currency, amount.abs()))
+                        withholdingTax.add(IbWithholdingTax(date, IbParser.extractSymbol(description), currency, amount.abs()))
                     }
                 }
                 "Interest" -> {
@@ -62,17 +64,19 @@ class IbCsvParser : IbParser {
         return IbActivityData(dividends, withholdingTax, interest)
     }
 
-    private fun extractSymbol(description: String): String {
-        val idx = description.indexOf('(')
-        return if (idx > 0) description.substring(0, idx).trim()
-        else description.split(" ").firstOrNull() ?: description
-    }
-
     private fun parseDate(s: String): LocalDate? =
-        try { LocalDate.parse(s, dateFormatter) } catch (e: Exception) { null }
+        try { LocalDate.parse(s, dateFormatter) }
+        catch (e: Exception) {
+            log.warn("Failed to parse date '{}': {}", s, e.message)
+            null
+        }
 
     private fun parseBigDecimal(s: String): BigDecimal? =
-        try { BigDecimal(s.replace(",", "")) } catch (e: Exception) { null }
+        try { BigDecimal(s.replace(",", "")) }
+        catch (e: Exception) {
+            log.warn("Failed to parse amount '{}': {}", s, e.message)
+            null
+        }
 
     private fun parseCsvLine(line: String): List<String> {
         val result = mutableListOf<String>()

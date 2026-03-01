@@ -1,6 +1,7 @@
 package com.steuerauszug.backend.parser
 
 import com.steuerauszug.backend.model.*
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.w3c.dom.Element
 import java.math.BigDecimal
@@ -11,6 +12,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 @Component
 class IbFlexQueryParser : IbParser {
 
+    private val log = LoggerFactory.getLogger(IbFlexQueryParser::class.java)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     override fun parse(content: String): IbActivityData {
@@ -24,14 +26,19 @@ class IbFlexQueryParser : IbParser {
 
         val transactions = doc.getElementsByTagName("CashTransaction")
         for (i in 0 until transactions.length) {
-            val el = transactions.item(i) as Element
+            val el = transactions.item(i) as? Element ?: continue
             val type = el.getAttribute("type")
             val currency = el.getAttribute("currency")
             val rawDate = el.getAttribute("dateTime").take(10)
             val description = el.getAttribute("description")
-            val symbol = el.getAttribute("symbol").ifEmpty { extractSymbol(description) }
+            val symbol = el.getAttribute("symbol").ifEmpty { IbParser.extractSymbol(description) }
             val amount = el.getAttribute("amount").replace(",", "").toBigDecimalOrNull() ?: continue
-            val date = try { LocalDate.parse(rawDate, dateFormatter) } catch (e: Exception) { continue }
+            val date = try {
+                LocalDate.parse(rawDate, dateFormatter)
+            } catch (e: Exception) {
+                log.warn("Failed to parse date '{}': {}", rawDate, e.message)
+                continue
+            }
 
             when {
                 type == "Dividends" -> {
@@ -51,11 +58,5 @@ class IbFlexQueryParser : IbParser {
         }
 
         return IbActivityData(dividends, withholdingTax, interest)
-    }
-
-    private fun extractSymbol(description: String): String {
-        val idx = description.indexOf('(')
-        return if (idx > 0) description.substring(0, idx).trim()
-        else description.split(" ").firstOrNull() ?: description
     }
 }

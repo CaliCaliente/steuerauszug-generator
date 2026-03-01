@@ -17,6 +17,7 @@ import com.itextpdf.layout.element.Table
 import com.itextpdf.layout.properties.TextAlignment
 import com.itextpdf.layout.properties.UnitValue
 import com.steuerauszug.backend.model.EchTaxStatement
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.io.ByteArrayOutputStream
 import java.math.BigDecimal
@@ -27,94 +28,102 @@ import javax.imageio.ImageIO
 @Component
 class PdfGenerator {
 
+    companion object {
+        private val log = LoggerFactory.getLogger(PdfGenerator::class.java)
+        private const val FONT_SIZE_TITLE = 18f
+        private const val FONT_SIZE_LABEL = 10f
+        private const val FONT_SIZE_BODY = 9f
+        private const val FONT_SIZE_SMALL = 8f
+        private const val FONT_SIZE_FOOTER = 7f
+        private const val PAGE_MARGIN = 36f
+    }
+
     fun generate(statement: EchTaxStatement, xmlContent: String): ByteArray {
         val outputStream = ByteArrayOutputStream()
         val pdfDoc = PdfDocument(PdfWriter(outputStream))
         val doc = Document(pdfDoc, PageSize.A4.rotate())
-        doc.setMargins(36f, 36f, 36f, 36f)
+        doc.setMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN)
 
-        // Header
+        addHeader(doc, statement)
+        addInfoTable(doc, statement)
+        addItemsTable(doc, statement)
+        addBarcode(doc, xmlContent)
+        addFooter(doc)
+
+        doc.close()
+        return outputStream.toByteArray()
+    }
+
+    private fun addHeader(doc: Document, statement: EchTaxStatement) {
         doc.add(
             Paragraph("E-Steuerausweis ${statement.taxPeriod}")
-                .setFontSize(18f)
+                .setFontSize(FONT_SIZE_TITLE)
                 .setBold()
                 .setTextAlignment(TextAlignment.CENTER)
         )
         doc.add(
             Paragraph("Dokument-ID: ${statement.documentId}   |   Kanton: ${statement.canton}")
-                .setFontSize(9f)
+                .setFontSize(FONT_SIZE_BODY)
                 .setTextAlignment(TextAlignment.CENTER)
         )
         doc.add(
             Paragraph("Steuerperiode: ${statement.periodFrom} bis ${statement.periodTo}")
-                .setFontSize(9f)
+                .setFontSize(FONT_SIZE_BODY)
                 .setTextAlignment(TextAlignment.CENTER)
         )
         doc.add(Paragraph("\n"))
+    }
 
-        // Institution / Customer info block
-        val infoTable = Table(UnitValue.createPercentArray(floatArrayOf(50f, 50f))).useAllAvailableWidth()
+    private fun addInfoTable(doc: Document, statement: EchTaxStatement) {
+        val table = Table(UnitValue.createPercentArray(floatArrayOf(50f, 50f))).useAllAvailableWidth()
 
         val institutionCell = Cell()
-        institutionCell.add(Paragraph("Finanzinstitut").setBold().setFontSize(10f))
-        institutionCell.add(Paragraph(statement.institution.name).setFontSize(9f))
-        institutionCell.add(Paragraph(statement.institution.address).setFontSize(9f))
-        institutionCell.add(Paragraph("Clearing-Nr.: ${statement.institution.clearingNumber}").setFontSize(9f))
+        institutionCell.add(Paragraph("Finanzinstitut").setBold().setFontSize(FONT_SIZE_LABEL))
+        institutionCell.add(Paragraph(statement.institution.name).setFontSize(FONT_SIZE_BODY))
+        institutionCell.add(Paragraph(statement.institution.address).setFontSize(FONT_SIZE_BODY))
+        institutionCell.add(Paragraph("Clearing-Nr.: ${statement.institution.clearingNumber}").setFontSize(FONT_SIZE_BODY))
 
         val customerCell = Cell()
-        customerCell.add(Paragraph("Kunde / Steuerpflichtiger").setBold().setFontSize(10f))
-        customerCell.add(Paragraph(statement.customer.name).setFontSize(9f))
-        customerCell.add(Paragraph(statement.customer.address).setFontSize(9f))
-        customerCell.add(Paragraph("Kundennummer: ${statement.customer.customerNumber}").setFontSize(9f))
+        customerCell.add(Paragraph("Kunde / Steuerpflichtiger").setBold().setFontSize(FONT_SIZE_LABEL))
+        customerCell.add(Paragraph(statement.customer.name).setFontSize(FONT_SIZE_BODY))
+        customerCell.add(Paragraph(statement.customer.address).setFontSize(FONT_SIZE_BODY))
+        customerCell.add(Paragraph("Kundennummer: ${statement.customer.customerNumber}").setFontSize(FONT_SIZE_BODY))
 
-        infoTable.addCell(institutionCell)
-        infoTable.addCell(customerCell)
-        doc.add(infoTable)
+        table.addCell(institutionCell)
+        table.addCell(customerCell)
+        doc.add(table)
         doc.add(Paragraph("\n"))
+    }
 
-        // Income items table
+    private fun addItemsTable(doc: Document, statement: EchTaxStatement) {
         val headers = listOf("Beschreibung", "Währung", "Bruttobetrag", "Quellensteuer", "Nettobetrag", "Quellenland")
-        val itemsTable = Table(UnitValue.createPercentArray(floatArrayOf(30f, 10f, 15f, 15f, 15f, 15f))).useAllAvailableWidth()
+        val table = Table(UnitValue.createPercentArray(floatArrayOf(30f, 10f, 15f, 15f, 15f, 15f))).useAllAvailableWidth()
 
         for (header in headers) {
-            val h = Cell()
-            h.add(Paragraph(header).setBold().setFontSize(9f))
-            itemsTable.addHeaderCell(h)
+            table.addHeaderCell(Cell().apply { add(Paragraph(header).setBold().setFontSize(FONT_SIZE_BODY)) })
         }
 
         for (item in statement.items) {
-            itemsTable.addCell(Cell().apply { add(Paragraph(item.description).setFontSize(8f)) })
-            itemsTable.addCell(Cell().apply { add(Paragraph(item.currency).setFontSize(8f)) })
-            itemsTable.addCell(Cell().apply {
-                add(Paragraph(fmt(item.grossAmount)).setFontSize(8f).setTextAlignment(TextAlignment.RIGHT))
-            })
-            itemsTable.addCell(Cell().apply {
-                add(Paragraph(fmt(item.withholdingTax)).setFontSize(8f).setTextAlignment(TextAlignment.RIGHT))
-            })
-            itemsTable.addCell(Cell().apply {
-                add(Paragraph(fmt(item.netAmount)).setFontSize(8f).setTextAlignment(TextAlignment.RIGHT))
-            })
-            itemsTable.addCell(Cell().apply { add(Paragraph(item.sourceCountry).setFontSize(8f)) })
+            table.addCell(Cell().apply { add(Paragraph(item.description).setFontSize(FONT_SIZE_SMALL)) })
+            table.addCell(Cell().apply { add(Paragraph(item.currency).setFontSize(FONT_SIZE_SMALL)) })
+            table.addCell(Cell().apply { add(Paragraph(fmt(item.grossAmount)).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT)) })
+            table.addCell(Cell().apply { add(Paragraph(fmt(item.withholdingTax)).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT)) })
+            table.addCell(Cell().apply { add(Paragraph(fmt(item.netAmount)).setFontSize(FONT_SIZE_SMALL).setTextAlignment(TextAlignment.RIGHT)) })
+            table.addCell(Cell().apply { add(Paragraph(item.sourceCountry).setFontSize(FONT_SIZE_SMALL)) })
         }
 
-        // Totals row
-        itemsTable.addCell(Cell().apply { add(Paragraph("Total").setBold().setFontSize(9f)) })
-        itemsTable.addCell(Cell().apply { add(Paragraph("").setFontSize(9f)) })
-        itemsTable.addCell(Cell().apply {
-            add(Paragraph(fmt(statement.totalGross)).setBold().setFontSize(9f).setTextAlignment(TextAlignment.RIGHT))
-        })
-        itemsTable.addCell(Cell().apply {
-            add(Paragraph(fmt(statement.totalWithholding)).setBold().setFontSize(9f).setTextAlignment(TextAlignment.RIGHT))
-        })
-        itemsTable.addCell(Cell().apply {
-            add(Paragraph(fmt(statement.totalNet)).setBold().setFontSize(9f).setTextAlignment(TextAlignment.RIGHT))
-        })
-        itemsTable.addCell(Cell().apply { add(Paragraph("").setFontSize(9f)) })
+        table.addCell(Cell().apply { add(Paragraph("Total").setBold().setFontSize(FONT_SIZE_BODY)) })
+        table.addCell(Cell().apply { add(Paragraph("").setFontSize(FONT_SIZE_BODY)) })
+        table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalGross)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
+        table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalWithholding)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
+        table.addCell(Cell().apply { add(Paragraph(fmt(statement.totalNet)).setBold().setFontSize(FONT_SIZE_BODY).setTextAlignment(TextAlignment.RIGHT)) })
+        table.addCell(Cell().apply { add(Paragraph("").setFontSize(FONT_SIZE_BODY)) })
 
-        doc.add(itemsTable)
+        doc.add(table)
         doc.add(Paragraph("\n"))
+    }
 
-        // PDF417 barcode
+    private fun addBarcode(doc: Document, xmlContent: String) {
         try {
             val barcodeBytes = generateBarcode(xmlContent)
             val barcodeImg = Image(ImageDataFactory.create(barcodeBytes))
@@ -124,20 +133,17 @@ class PdfGenerator {
             imgParagraph.setTextAlignment(TextAlignment.CENTER)
             doc.add(imgParagraph)
         } catch (e: Exception) {
-            System.err.println("Barcode generation failed: ${e::class.simpleName}: ${e.message}")
-            e.printStackTrace(System.err)
-            doc.add(Paragraph("Barcode konnte nicht generiert werden: ${e.message}").setFontSize(8f))
+            log.warn("Barcode generation failed: ${e::class.simpleName}: ${e.message}", e)
+            doc.add(Paragraph("Barcode konnte nicht generiert werden: ${e.message}").setFontSize(FONT_SIZE_SMALL))
         }
+    }
 
-        // Footer
+    private fun addFooter(doc: Document) {
         doc.add(
             Paragraph("Generiert gemäss eCH-0196 v2.2.0 | PDF417-Barcode enthält GZIP-komprimiertes XML")
-                .setFontSize(7f)
+                .setFontSize(FONT_SIZE_FOOTER)
                 .setTextAlignment(TextAlignment.CENTER)
         )
-
-        doc.close()
-        return outputStream.toByteArray()
     }
 
     private fun generateBarcode(content: String): ByteArray {
