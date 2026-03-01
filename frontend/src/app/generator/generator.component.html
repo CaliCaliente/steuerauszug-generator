@@ -1,0 +1,115 @@
+<div class="generator-container">
+  <header class="page-header">
+    <h1>E-Steuerausweis Generator</h1>
+    <p class="subtitle">eCH-0196 v2.2 &nbsp;|&nbsp; Interactive Brokers Activity Statement</p>
+  </header>
+
+  <!-- Step 1: File Upload -->
+  <section class="card">
+    <h2><span class="step">1</span> Datei hochladen</h2>
+    <div
+      class="drop-zone"
+      [class.drag-over]="isDragging"
+      [class.file-selected]="!!selectedFile"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave()"
+      (drop)="onDrop($event)"
+    >
+      @if (selectedFile) {
+        <div class="file-info">
+          <span class="file-icon">&#128196;</span>
+          <span class="file-name">{{ selectedFile.name }}</span>
+          <span class="file-size">({{ (selectedFile.size / 1024).toFixed(1) }} KB)</span>
+        </div>
+      } @else {
+        <p class="drop-hint">CSV oder XML hier ablegen</p>
+      }
+      <label class="upload-btn">
+        {{ selectedFile ? 'Andere Datei wählen' : 'Datei auswählen' }}
+        <input type="file" accept=".csv,.xml" (change)="onFileSelected($event)" hidden>
+      </label>
+    </div>
+    <p class="hint">Unterstützt: IB Activity Statement (.csv) und Flex Query (.xml)</p>
+  </section>
+
+  <!-- Step 2: Base Configuration -->
+  <form [formGroup]="form">
+    <section class="card">
+      <h2><span class="step">2</span> Steuerperiode &amp; Kanton</h2>
+      <div class="form-grid cols-2">
+        <div class="form-group">
+          <label for="taxYear">Steuerjahr</label>
+          <input id="taxYear" type="number" formControlName="taxYear" placeholder="2024">
+        </div>
+        <div class="form-group">
+          <label for="canton">Kanton</label>
+          <select id="canton" formControlName="canton">
+            @for (canton of cantons; track canton) {
+              <option [value]="canton">{{ canton }}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: Institution -->
+    <section class="card">
+      <h2><span class="step">3</span> Finanzinstitut</h2>
+      <div class="form-grid cols-2">
+        <div class="form-group">
+          <label for="clearingNumber">Clearing-Nummer</label>
+          <input id="clearingNumber" type="text" formControlName="clearingNumber" placeholder="z.B. 8888">
+        </div>
+        <div class="form-group">
+          <label for="institutionName">Name des Instituts</label>
+          <input id="institutionName" type="text" formControlName="institutionName" placeholder="z.B. Interactive Brokers">
+        </div>
+        <div class="form-group full-width">
+          <label for="institutionAddress">Adresse</label>
+          <input id="institutionAddress" type="text" formControlName="institutionAddress" placeholder="z.B. Postfach 1234, 8001 Zürich">
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 4: Customer -->
+    <section class="card">
+      <h2><span class="step">4</span> Kunde / Steuerpflichtiger</h2>
+      <div class="form-grid cols-2">
+        <div class="form-group">
+          <label for="customerNumber">Kundennummer (IB Kontonummer)</label>
+          <input id="customerNumber" type="text" formControlName="customerNumber" placeholder="z.B. U1234567">
+        </div>
+        <div class="form-group">
+          <label for="customerName">Name</label>
+          <input id="customerName" type="text" formControlName="customerName" placeholder="Vor- und Nachname">
+        </div>
+        <div class="form-group full-width">
+          <label for="customerAddress">Adresse</label>
+          <input id="customerAddress" type="text" formControlName="customerAddress" placeholder="z.B. Musterstrasse 1, 8001 Zürich">
+        </div>
+      </div>
+    </section>
+  </form>
+
+  <!-- Error -->
+  @if (error) {
+    <div class="error-box">{{ error }}</div>
+  }
+
+  <!-- Generate button -->
+  <div class="action-bar">
+    <button class="generate-btn" [disabled]="!canGenerate" (click)="generate()">
+      @if (isLoading) {
+        <span class="spinner"></span>
+        Generierung läuft&hellip;
+      } @else {
+        PDF generieren &amp; herunterladen
+      }
+    </button>
+    @if (!selectedFile) {
+      <p class="action-hint">Bitte zuerst eine Datei hochladen.</p>
+    } @else if (form.invalid) {
+      <p class="action-hint">Bitte alle Felder ausfüllen.</p>
+    }
+  </div>
+</div>
