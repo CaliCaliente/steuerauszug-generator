@@ -196,15 +196,17 @@ class EchXmlGeneratorTest {
         assertEquals("2024-03-15", dividendPayment.getAttribute("paymentDate"))
         assertEquals("PIECE", dividendPayment.getAttribute("quotationType"))
         assertEquals("1", dividendPayment.getAttribute("quantity"))
+        assertEquals("USD", dividendPayment.getAttribute("amountCurrency")) // original currency, not hardcoded CHF
 
         val interestPayment = payments.item(1) as Element
         assertEquals("0", interestPayment.getAttribute("grossRevenueA"))
         assertEquals("5.00", interestPayment.getAttribute("grossRevenueB"))
         assertEquals("2024-03-31", interestPayment.getAttribute("paymentDate"))
+        assertEquals("USD", interestPayment.getAttribute("amountCurrency"))
     }
 
     @Test
-    fun `should write taxValue element with undefined=1 when present`() {
+    fun `should write taxValue element without undefined when valueCHF is present`() {
         val secWithTaxValue = statement.securities[0].copy(
             yearEndTaxValue = EchTaxValue(
                 referenceDate = LocalDate.of(2024, 12, 31),
@@ -222,9 +224,33 @@ class EchXmlGeneratorTest {
         val taxValues = doc.getElementsByTagNameNS("http://www.ech.ch/xmlns/eCH-0196/2", "taxValue")
         assertEquals(1, taxValues.length)
         val tv = taxValues.item(0) as Element
-        assertEquals("1", tv.getAttribute("undefined"))
+        assertEquals("1605.24", tv.getAttribute("value"))
+        assertEquals("", tv.getAttribute("undefined")) // undefined must not be written when value is known
         assertEquals("2024-12-31", tv.getAttribute("referenceDate"))
-        assertEquals("10", tv.getAttribute("quantity"))
+        assertEquals("USD", tv.getAttribute("balanceCurrency"))
+    }
+
+    @Test
+    fun `should write taxValue element with undefined=1 when valueCHF is null`() {
+        val secWithTaxValue = statement.securities[0].copy(
+            yearEndTaxValue = EchTaxValue(
+                referenceDate = LocalDate.of(2024, 12, 31),
+                quantity = BigDecimal("10"),
+                unitPrice = BigDecimal("182.00"),
+                balance = BigDecimal("1820.00"),
+                exchangeRate = null,
+                valueCHF = null
+            )
+        )
+        val stmtWithTaxValue = statement.copy(securities = listOf(secWithTaxValue))
+        val xml = generator.generate(stmtWithTaxValue)
+        val doc = parseXml(xml)
+
+        val taxValues = doc.getElementsByTagNameNS("http://www.ech.ch/xmlns/eCH-0196/2", "taxValue")
+        assertEquals(1, taxValues.length)
+        val tv = taxValues.item(0) as Element
+        assertEquals("1", tv.getAttribute("undefined"))
+        assertEquals("", tv.getAttribute("value"))
     }
 
     @Test
@@ -264,6 +290,7 @@ class EchXmlGeneratorTest {
         assertEquals("true", buyStock.getAttribute("mutation"))
         assertEquals("Kauf", buyStock.getAttribute("name"))
         assertEquals("2024-06-01", buyStock.getAttribute("referenceDate"))
+        assertEquals("USD", buyStock.getAttribute("balanceCurrency")) // original currency, not hardcoded CHF
 
         val yearEndStock = stocks.item(1) as Element
         assertEquals("false", yearEndStock.getAttribute("mutation"))

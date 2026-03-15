@@ -121,19 +121,19 @@ class EchXmlGenerator {
         writer.writeAttribute("securityCategory", security.securityCategory)
         writer.writeAttribute("securityName", security.description.take(SECURITY_NAME_MAX_LENGTH))
 
-        security.yearEndTaxValue?.let { writeTaxValue(writer, it) }
-        security.payments.forEach { writePayment(writer, it, security.securityCategory) }
-        security.stocks.forEach { writeStock(writer, it) }
+        security.yearEndTaxValue?.let { writeTaxValue(writer, it, security.currency) }
+        security.payments.forEach { writePayment(writer, it, security.securityCategory, security.currency) }
+        security.stocks.forEach { writeStock(writer, it, security.currency) }
 
         writer.writeEndElement() // security
     }
 
-    private fun writeTaxValue(writer: XMLStreamWriter, taxValue: EchTaxValue) {
+    private fun writeTaxValue(writer: XMLStreamWriter, taxValue: EchTaxValue, currency: String) {
         writer.writeEmptyElement(NAMESPACE, "taxValue")
         writer.writeAttribute("referenceDate", taxValue.referenceDate.toString())
         writer.writeAttribute("quotationType", QUOTATION_TYPE)
         writer.writeAttribute("quantity", taxValue.quantity.toPlainString())
-        writer.writeAttribute("balanceCurrency", "CHF")
+        writer.writeAttribute("balanceCurrency", currency)
         writer.writeAttribute("unitPrice", taxValue.unitPrice.toPlainString())
         writer.writeAttribute("balance", taxValue.balance.toPlainString())
         if (taxValue.exchangeRate != null) {
@@ -141,17 +141,19 @@ class EchXmlGenerator {
         }
         if (taxValue.valueCHF != null) {
             writer.writeAttribute("value", taxValue.valueCHF.toPlainString())
+        } else {
+            // value not determinable at reference date
+            writer.writeAttribute("undefined", "1")
         }
-        writer.writeAttribute("undefined", "1")
     }
 
-    private fun writePayment(writer: XMLStreamWriter, payment: EchPayment, securityCategory: String) {
+    private fun writePayment(writer: XMLStreamWriter, payment: EchPayment, securityCategory: String, currency: String) {
         val isShare = securityCategory == SECURITY_CATEGORY_SHARE
         writer.writeEmptyElement(NAMESPACE, "payment")
         writer.writeAttribute("paymentDate", payment.date.toString())
         writer.writeAttribute("quotationType", QUOTATION_TYPE)
         writer.writeAttribute("quantity", payment.quantity.toPlainString())
-        writer.writeAttribute("amountCurrency", "CHF")
+        writer.writeAttribute("amountCurrency", currency)
         if (isShare) {
             writer.writeAttribute("grossRevenueA", payment.grossAmount.toPlainString())
             writer.writeAttribute("grossRevenueB", BigDecimal.ZERO.toPlainString())
@@ -167,14 +169,14 @@ class EchXmlGenerator {
         }
     }
 
-    private fun writeStock(writer: XMLStreamWriter, stock: EchStock) {
+    private fun writeStock(writer: XMLStreamWriter, stock: EchStock, currency: String) {
         writer.writeEmptyElement(NAMESPACE, "stock")
         writer.writeAttribute("referenceDate", stock.date.toString())
         writer.writeAttribute("mutation", stock.mutation.toString())
         writer.writeAttribute("name", stock.name)
         writer.writeAttribute("quotationType", QUOTATION_TYPE)
         writer.writeAttribute("quantity", stock.quantity.toPlainString())
-        writer.writeAttribute("balanceCurrency", "CHF")
+        writer.writeAttribute("balanceCurrency", currency)
         writer.writeAttribute("unitPrice", stock.unitPrice.toPlainString())
         writer.writeAttribute("balance", stock.balance.toPlainString())
         if (stock.exchangeRate != null) {
