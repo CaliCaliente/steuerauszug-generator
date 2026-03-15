@@ -1,11 +1,12 @@
 package com.steuerauszug.backend
 
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.EncodeHintType
-import com.google.zxing.client.j2se.MatrixToImageWriter
-import com.google.zxing.pdf417.PDF417Writer
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import uk.org.okapibarcode.backend.Pdf417
+import uk.org.okapibarcode.backend.Pdf417.Mode
+import uk.org.okapibarcode.graphics.Color as OkapiColor
+import uk.org.okapibarcode.output.Java2DRenderer
+import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 
@@ -16,14 +17,21 @@ class BarcodeTest {
     }
 
     @Test
-    fun `barcode generation produces a valid PNG`() {
-        val hints = mapOf(
-            EncodeHintType.CHARACTER_SET to "UTF-8",
-            EncodeHintType.ERROR_CORRECTION to 2
-        )
-        val content = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><taxStatement>test</taxStatement>"
-        val bitMatrix = PDF417Writer().encode(content, BarcodeFormat.PDF_417, 800, 400, hints)
-        val img = MatrixToImageWriter.toBufferedImage(bitMatrix)
+    fun `OkapiBarcode PDF417 produces a valid PNG`() {
+        val barcode = Pdf417(Mode.NORMAL).apply {
+            setContent("<?xml version=\"1.0\" encoding=\"UTF-8\"?><taxStatement>test</taxStatement>")
+            dataColumns = 13
+            setRows(35)
+            setPreferredEccLevel(4)
+        }
+
+        val w = (barcode.width * 2.0).toInt()
+        val h = (barcode.height * 2.0).toInt()
+        val img = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        val g2d = img.createGraphics()
+        Java2DRenderer(g2d, 2.0, OkapiColor(255, 255, 255), OkapiColor(0, 0, 0)).render(barcode)
+        g2d.dispose()
+
         val baos = ByteArrayOutputStream()
         val ok = ImageIO.write(img, "PNG", baos)
         assertTrue(ok) { "ImageIO.write returned false" }

@@ -92,7 +92,7 @@
 			<version>7.2.6</version>
 		</dependency>
 
-		<!-- ZXing PDF417 barcode -->
+		<!-- ZXing PDF417 barcode (decode only) -->
 		<dependency>
 			<groupId>com.google.zxing</groupId>
 			<artifactId>core</artifactId>
@@ -102,6 +102,13 @@
 			<groupId>com.google.zxing</groupId>
 			<artifactId>javase</artifactId>
 			<version>3.5.3</version>
+		</dependency>
+
+		<!-- OkapiBarcode PDF417 barcode (encode only) -->
+		<dependency>
+			<groupId>uk.org.okapibarcode</groupId>
+			<artifactId>okapibarcode</artifactId>
+			<version>0.5.5</version>
 		</dependency>
 	</dependencies>
 
