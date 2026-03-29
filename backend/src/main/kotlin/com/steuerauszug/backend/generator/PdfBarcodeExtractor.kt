@@ -9,7 +9,6 @@ import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.pdf417.PDF417Reader
 import com.google.zxing.pdf417.PDF417ResultMetadata
 import org.apache.pdfbox.Loader
-import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDResources
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject

@@ -361,15 +361,15 @@ class PdfGenerator {
 
     private fun renderSegment(data: ByteArray, position: Int, total: Int, fileId: String, documentId: String): ByteArray {
         val barcode = Pdf417(Mode.NORMAL).apply {
-            setContent(String(data, Charsets.ISO_8859_1))  // ISO-8859-1 preserves byte values
+            content = String(data, Charsets.ISO_8859_1)  // ISO-8859-1 preserves byte values
             dataColumns = BARCODE_DATA_COLUMNS
             setRows(BARCODE_ROWS)
-            setPreferredEccLevel(BARCODE_ECC_LEVEL)
-            setStructuredAppendPosition(position)
-            setStructuredAppendTotal(total)
-            setStructuredAppendFileId(fileId)
-            setStructuredAppendFileName(documentId)
-            setStructuredAppendIncludeSegmentCount(true)
+            preferredEccLevel = BARCODE_ECC_LEVEL
+            structuredAppendPosition = position
+            structuredAppendTotal = total
+            structuredAppendFileId = fileId
+            structuredAppendFileName = documentId
+            structuredAppendIncludeSegmentCount = true
         }
         assertBarcodeSpec(barcode)
 

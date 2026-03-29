@@ -4,10 +4,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.web.client.RestTemplate
 import org.w3c.dom.Element
-import org.w3c.dom.NodeList
 import java.io.ByteArrayInputStream
 import java.math.BigDecimal
-import java.math.MathContext
 import java.math.RoundingMode
 import javax.xml.parsers.DocumentBuilderFactory
 
