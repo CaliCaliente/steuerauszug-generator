@@ -3,6 +3,12 @@
 ## Key Specifications
 The resulting PDF must always be compliant with this standard: https://www.ech.ch/sites/default/files/imce/eCH-Dossier/0181-0210/eCH-0196/2.0/Beilagen/eCH-0196%20E-Steuerauszug_Technische%20Wegleitung%202.0.pdf
 
+## Backend Libraries
+Following libraries need to be used and must not be replaced by other alternatives
+- PDF Generation needs to be done with Apache PDFBox
+- XML Compression is done with ZLIB
+- PDF417 Creation is done with okapiBarcode
+
 ## Kotlin Principles
 - Prefer `val` over `var` — only use `var` when mutation is truly necessary
 - Use data classes for DTOs, value objects, and simple models

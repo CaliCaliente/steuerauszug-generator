@@ -8,10 +8,11 @@ import com.google.zxing.client.j2se.BufferedImageLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.pdf417.PDF417Reader
 import com.google.zxing.pdf417.PDF417ResultMetadata
-import com.itextpdf.kernel.pdf.PdfDocument
-import com.itextpdf.kernel.pdf.PdfName
-import com.itextpdf.kernel.pdf.PdfReader
-import com.itextpdf.kernel.pdf.xobject.PdfImageXObject
+import org.apache.pdfbox.Loader
+import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.pdmodel.PDResources
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject
 import org.springframework.stereotype.Component
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -36,34 +37,27 @@ class PdfBarcodeExtractor {
     }
 
     private fun extractAllBarcodeImages(pdfBytes: ByteArray): List<BufferedImage> =
-        PdfDocument(PdfReader(ByteArrayInputStream(pdfBytes))).use { pdfDoc ->
-            // Barcodes are added last, so collect images from all pages in order
+        Loader.loadPDF(pdfBytes).use { doc ->
             val visited = mutableSetOf<Int>()
-            (1..pdfDoc.numberOfPages).flatMap { pageNum ->
-                collectImages(pdfDoc.getPage(pageNum).resources, visited)
-            }
+            doc.pages.flatMap { page -> collectImages(page.resources, visited) }
         }
 
     /** Returns all Image XObjects from the given resources, recursing into Form XObjects. */
-    private fun collectImages(
-        resources: com.itextpdf.kernel.pdf.PdfResources,
-        visited: MutableSet<Int>
-    ): List<BufferedImage> {
-        val xObjects = resources.getResource(PdfName.XObject) ?: return emptyList()
-        return xObjects.keySet().flatMap { name ->
-            val stream = xObjects.getAsStream(name) ?: return@flatMap emptyList()
-            val objNum = stream.indirectReference?.objNumber ?: System.identityHashCode(stream)
-            if (!visited.add(objNum)) return@flatMap emptyList()
-            when (stream.getAsName(PdfName.Subtype)) {
-                PdfName.Image -> listOf(PdfImageXObject(stream).bufferedImage)
-                PdfName.Form  -> collectImages(
-                    com.itextpdf.kernel.pdf.PdfResources(stream.getAsDictionary(PdfName.Resources) ?: return@flatMap emptyList()),
-                    visited
-                )
-                else -> emptyList()
+    private fun collectImages(resources: PDResources, visited: MutableSet<Int>): List<BufferedImage> =
+        resources.xObjectNames
+            .mapNotNull { name ->
+                val xObj = resources.getXObject(name)
+                val id = System.identityHashCode(xObj.cosObject)
+                if (!visited.add(id)) return@mapNotNull null
+                xObj to name
             }
-        }
-    }
+            .flatMap { (xObj, _) ->
+                when (xObj) {
+                    is PDImageXObject -> listOf(xObj.image)
+                    is PDFormXObject  -> collectImages(xObj.resources, visited)
+                    else              -> emptyList()
+                }
+            }
 
     private fun decodePdf417(image: BufferedImage): Result {
         val hints = mapOf(DecodeHintType.TRY_HARDER to true)

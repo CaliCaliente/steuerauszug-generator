@@ -3,6 +3,7 @@ package com.steuerauszug.backend.controller
 import com.steuerauszug.backend.generator.EchXmlGenerator
 import com.steuerauszug.backend.generator.EchXmlValidator
 import com.steuerauszug.backend.generator.PdfBarcodeExtractor
+import com.steuerauszug.backend.generator.PdfBarcodeValidator
 import com.steuerauszug.backend.generator.PdfGenerator
 import com.steuerauszug.backend.generator.XmlValidationException
 import com.steuerauszug.backend.mapper.IbToEchMapper
@@ -11,6 +12,7 @@ import com.steuerauszug.backend.model.ValidationResponse
 import com.steuerauszug.backend.parser.IbCsvParser
 import com.steuerauszug.backend.parser.IbFlexQueryParser
 import jakarta.validation.Valid
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -27,8 +29,10 @@ class TaxStatementController(
     private val xmlGenerator: EchXmlGenerator,
     private val pdfGenerator: PdfGenerator,
     private val echXmlValidator: EchXmlValidator,
-    private val pdfBarcodeExtractor: PdfBarcodeExtractor
+    private val pdfBarcodeExtractor: PdfBarcodeExtractor,
+    private val pdfBarcodeValidator: PdfBarcodeValidator
 ) {
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     companion object {
         private const val PDF_FILENAME_PREFIX = "steuerausweis-"
@@ -39,6 +43,7 @@ class TaxStatementController(
         @RequestPart("file") file: MultipartFile,
         @Valid @RequestPart("request") request: GenerationRequest
     ): ResponseEntity<ByteArray> {
+        logger.info("Start generating e-Steuerauszug")
         val content = file.inputStream.bufferedReader().readText()
         val ibData = if (content.trimStart().startsWith("<")) {
             ibFlexQueryParser.parse(content)
@@ -49,11 +54,13 @@ class TaxStatementController(
         val xml = xmlGenerator.generate(statement)
         echXmlValidator.validate(xml)
         val pdf = pdfGenerator.generate(statement, xml)
+        pdfBarcodeValidator.validate(pdf, xml)
 
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=$PDF_FILENAME_PREFIX${request.taxYear}.pdf")
             .contentType(MediaType.APPLICATION_PDF)
             .body(pdf)
+            .also { logger.info("Successfully generated e-Steuerauszug PDF") }
     }
 
     @PostMapping("/validate", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])

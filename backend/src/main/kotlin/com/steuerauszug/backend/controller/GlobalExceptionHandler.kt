@@ -1,5 +1,6 @@
 package com.steuerauszug.backend.controller
 
+import com.steuerauszug.backend.generator.PdfBarcodeValidationException
 import com.steuerauszug.backend.generator.XmlValidationException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -24,6 +25,13 @@ class GlobalExceptionHandler {
         log.error("Generated XML failed schema validation: ${ex.errors}")
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(mapOf("error" to "Generated XML is invalid", "details" to ex.errors))
+    }
+
+    @ExceptionHandler(PdfBarcodeValidationException::class)
+    fun handlePdfBarcodeValidation(ex: PdfBarcodeValidationException): ResponseEntity<Map<String, Any>> {
+        log.error("PDF barcode validation failed: ${ex.errors}")
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(mapOf("error" to "PDF barcode validation failed", "details" to ex.errors))
     }
 
     @ExceptionHandler(Exception::class)

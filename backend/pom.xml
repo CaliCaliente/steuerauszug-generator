@@ -75,21 +75,11 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- iText 7 PDF generation -->
+		<!-- Apache PDFBox PDF generation and extraction -->
 		<dependency>
-			<groupId>com.itextpdf</groupId>
-			<artifactId>kernel</artifactId>
-			<version>7.2.6</version>
-		</dependency>
-		<dependency>
-			<groupId>com.itextpdf</groupId>
-			<artifactId>io</artifactId>
-			<version>7.2.6</version>
-		</dependency>
-		<dependency>
-			<groupId>com.itextpdf</groupId>
-			<artifactId>layout</artifactId>
-			<version>7.2.6</version>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.3</version>
 		</dependency>
 
 		<!-- ZXing PDF417 barcode (decode only) -->

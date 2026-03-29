@@ -41,7 +41,7 @@ class EstvExchangeRateService(private val restTemplate: RestTemplate) {
         }
 
     private fun fetchMonthlyRate(currency: String, year: Int, month: Int): BigDecimal {
-        val url = "$BAZG_URL?year=$year&month=$month"
+        val url = "$BAZG_URL?j=$year&m=$month"
         val xml = restTemplate.getForObject(url, String::class.java) ?: return BigDecimal.ONE
         return parseRate(xml, currency)
     }

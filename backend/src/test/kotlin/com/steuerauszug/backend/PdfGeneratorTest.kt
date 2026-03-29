@@ -1,9 +1,12 @@
 package com.steuerauszug.backend
 
+import com.steuerauszug.backend.generator.PdfBarcodeValidationException
 import com.steuerauszug.backend.generator.PdfGenerator
 import com.steuerauszug.backend.model.*
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import uk.org.okapibarcode.backend.Pdf417
 import java.math.BigDecimal
 import java.time.LocalDate
 
@@ -52,5 +55,40 @@ class PdfGeneratorTest {
         val xml = "<?xml version=\"1.0\"?><taxStatement>test</taxStatement>"
         val pdf = PdfGenerator().generate(statement, xml)
         assertTrue(pdf.size > MIN_PDF_SIZE) { "PDF too small: ${pdf.size} bytes" }
+    }
+
+    @Test
+    fun `assertBarcodeSpec throws when data columns are wrong`() {
+        val barcode = Pdf417(Pdf417.Mode.NORMAL).apply {
+            dataColumns = 5  // wrong: spec requires 13
+            setPreferredEccLevel(4)
+            setContent("test")
+        }
+        assertThrows<PdfBarcodeValidationException> {
+            PdfGenerator().assertBarcodeSpec(barcode)
+        }
+    }
+
+    @Test
+    fun `assertBarcodeSpec throws when ECC level is wrong`() {
+        val barcode = Pdf417(Pdf417.Mode.NORMAL).apply {
+            dataColumns = 13
+            setPreferredEccLevel(2)  // wrong: spec requires 4
+            setContent("test")
+        }
+        assertThrows<PdfBarcodeValidationException> {
+            PdfGenerator().assertBarcodeSpec(barcode)
+        }
+    }
+
+    @Test
+    fun `assertBarcodeSpec passes when spec parameters are correct`() {
+        val barcode = Pdf417(Pdf417.Mode.NORMAL).apply {
+            dataColumns = 13
+            setPreferredEccLevel(4)
+            setContent("test")
+        }
+        // should not throw
+        PdfGenerator().assertBarcodeSpec(barcode)
     }
 }
