@@ -69,7 +69,7 @@ class TaxStatementController(
         try {
             val xml = pdfBarcodeExtractor.extract(file.bytes)
             echXmlValidator.validate(xml)
-            ResponseEntity.ok(ValidationResponse(valid = true))
+            ResponseEntity.ok(ValidationResponse(valid = true)).also { logger.info("Validated XML from Barcodes") }
         } catch (e: XmlValidationException) {
             ResponseEntity.ok(ValidationResponse(valid = false, errors = e.errors))
         }
